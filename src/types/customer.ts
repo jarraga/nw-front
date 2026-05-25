@@ -38,6 +38,7 @@ export type CustomerAction = {
   customerID: number
   type: CustomerActionType
   comments: string
+  informantName: string
   actionDate: string
   createdAt: string
 }

@@ -38,6 +38,7 @@ import {
 } from '@tabler/icons-react'
 
 import { routePaths } from '../../routes/paths'
+import { useInformantSession } from '../../session/InformantSession'
 import type { AsyncStatus } from '../../types/async-status'
 import type {
   CompanyType,
@@ -220,11 +221,13 @@ function ContactModal({
 
 function AddActionModal({
   customerId,
+  informantName,
   opened,
   onClose,
   onSaved,
 }: {
   customerId: number
+  informantName: string
   opened: boolean
   onClose: () => void
   onSaved: () => Promise<void>
@@ -247,6 +250,7 @@ function AddActionModal({
         body: JSON.stringify({
           type,
           comments,
+          informantName,
         }),
       })
 
@@ -672,6 +676,11 @@ function ActionsSection({
                       <Badge variant="light">
                         {formatDateTime(action.actionDate)}
                       </Badge>
+                      {action.informantName ? (
+                        <Text size="sm" c="dimmed">
+                          {action.informantName}
+                        </Text>
+                      ) : null}
                     </Group>
                   </Group>
 
@@ -796,6 +805,7 @@ function PaymentsSection({ payments }: { payments: CustomerPayment[] }) {
 
 export function CustomerDetailPage() {
   const { customerId } = useParams()
+  const { informantName } = useInformantSession()
   const [status, setStatus] = useState<AsyncStatus>('loading')
   const [data, setData] = useState<CustomerDetailResponse | null>(null)
   const [errorMessage, setErrorMessage] = useState('')
@@ -999,6 +1009,7 @@ export function CustomerDetailPage() {
         {data ? (
           <AddActionModal
             customerId={data.customer.id}
+            informantName={informantName}
             opened={isActionModalOpen}
             onClose={() => setIsActionModalOpen(false)}
             onSaved={refreshCustomerDetail}
