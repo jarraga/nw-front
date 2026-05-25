@@ -259,7 +259,7 @@ function AddActionModal({
           <Text size="sm" fw={500} mb="xs">
             Tipo
           </Text>
-          <SimpleGrid cols={{ base: 2, sm: 4 }}>
+          <SimpleGrid cols={{ base: 1, sm: 2 }}>
             {actionTypeOptions.map((option) => {
               const OptionIcon = option.icon
               const isSelected = option.value === type
@@ -268,16 +268,11 @@ function AddActionModal({
                 <Button
                   key={option.value}
                   variant={isSelected ? 'filled' : 'light'}
-                  h="auto"
-                  py="sm"
+                  justify="flex-start"
+                  leftSection={<OptionIcon size={18} />}
                   onClick={() => setType(option.value)}
                 >
-                  <Stack align="center" gap={4}>
-                    <OptionIcon size={20} />
-                    <Text size="xs" fw={700}>
-                      {option.label}
-                    </Text>
-                  </Stack>
+                  {option.label}
                 </Button>
               )
             })}
