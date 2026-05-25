@@ -821,12 +821,6 @@ function groupPaymentsByYear(payments: CustomerPayment[]) {
   }, {})
 }
 
-function parseDateParts(value: string) {
-  const [year, month, day] = value.split('-').map(Number)
-
-  return { day, month, year }
-}
-
 function getMonthDays(year: number, month: number) {
   return new Date(year, month, 0).getDate()
 }
@@ -835,52 +829,35 @@ function buildDate(year: number, month: number, day: number) {
   return new Date(year, month - 1, Math.min(day, getMonthDays(year, month)))
 }
 
-function getNextMonth(year: number, month: number) {
-  if (month === 12) {
-    return { month: 1, year: year + 1 }
+function getFirstPaymentDate(payments: CustomerPayment[], dueDay: number) {
+  const firstPayment = [...payments].sort(
+    (a, b) => a.year - b.year || a.month - b.month,
+  )[0]
+
+  if (!firstPayment) {
+    return null
   }
 
-  return { month: month + 1, year }
+  return buildDate(firstPayment.year, firstPayment.month, dueDay)
 }
 
-function getFirstDueDate(billingStartedAt: string, dueDay: number) {
-  const billingStart = parseDateParts(billingStartedAt)
-
-  if (billingStart.day <= dueDay) {
-    return buildDate(billingStart.year, billingStart.month, dueDay)
-  }
-
-  const nextMonth = getNextMonth(billingStart.year, billingStart.month)
-
-  return buildDate(nextMonth.year, nextMonth.month, dueDay)
-}
-
-function getDueMonthsForYear(
-  year: number,
-  billingStartedAt: string,
-  dueDay: number,
-) {
-  const firstDueDate = getFirstDueDate(billingStartedAt, dueDay)
+function getDueMonthsForYear(year: number, firstPaymentDate: Date, dueDay: number) {
 
   return Array.from({ length: 12 }, (_, index) => index + 1).filter((month) => {
     const dueDate = buildDate(year, month, dueDay)
 
-    return dueDate >= firstDueDate && dueDate <= currentDate
+    return dueDate >= firstPaymentDate && dueDate <= currentDate
   })
 }
 
-function getPaymentYears(
-  paymentsByYear: Record<number, CustomerPayment[]>,
-  billingStartedAt: string,
-  dueDay: number,
-) {
-  const firstDueDate = getFirstDueDate(billingStartedAt, dueDay)
-  const paymentYears = Object.keys(paymentsByYear).map(Number)
+function getPaymentYears(payments: CustomerPayment[], dueDay: number) {
+  const firstPaymentDate = getFirstPaymentDate(payments, dueDay)
+  const paymentYears = payments.map((payment) => payment.year)
   const dueYears =
-    firstDueDate <= currentDate
+    firstPaymentDate !== null && firstPaymentDate <= currentDate
       ? Array.from(
-          { length: currentYear - firstDueDate.getFullYear() + 1 },
-          (_, index) => firstDueDate.getFullYear() + index,
+          { length: currentYear - firstPaymentDate.getFullYear() + 1 },
+          (_, index) => firstPaymentDate.getFullYear() + index,
         )
       : []
 
@@ -892,10 +869,13 @@ function getPaymentYears(
 function buildPaymentRows(
   year: number,
   payments: CustomerPayment[],
-  billingStartedAt: string,
+  firstPaymentDate: Date | null,
   dueDay: number,
 ) {
-  const dueMonths = getDueMonthsForYear(year, billingStartedAt, dueDay)
+  const dueMonths =
+    firstPaymentDate === null
+      ? []
+      : getDueMonthsForYear(year, firstPaymentDate, dueDay)
   const paymentMonths = payments.map((payment) => payment.month)
 
   return Array.from(new Set([...dueMonths, ...paymentMonths]))
@@ -907,20 +887,86 @@ function buildPaymentRows(
 }
 
 function PaymentsSection({
-  billingStartedAt,
+  customerId,
   dueDay,
+  onPaymentRegistered,
   payments,
 }: {
-  billingStartedAt: string
+  customerId: number
   dueDay: number
+  onPaymentRegistered: () => Promise<void>
   payments: CustomerPayment[]
 }) {
+  const [paymentToRegister, setPaymentToRegister] = useState<{
+    month: number
+    year: number
+  } | null>(null)
+  const [paidAt, setPaidAt] = useState('')
+  const [savingPaymentKey, setSavingPaymentKey] = useState('')
+  const [errorMessage, setErrorMessage] = useState('')
   const paymentsByYear = useMemo(() => groupPaymentsByYear(payments), [payments])
+  const firstPaymentDate = useMemo(
+    () => getFirstPaymentDate(payments, dueDay),
+    [dueDay, payments],
+  )
   const years = useMemo(
-    () => getPaymentYears(paymentsByYear, billingStartedAt, dueDay),
-    [billingStartedAt, dueDay, paymentsByYear],
+    () => getPaymentYears(payments, dueDay),
+    [dueDay, payments],
   )
   const defaultYear = years.at(-1)?.toString()
+
+  function handleOpenPaymentModal(year: number, month: number) {
+    setPaymentToRegister({ month, year })
+    setPaidAt(new Date().toISOString().slice(0, 10))
+    setErrorMessage('')
+  }
+
+  function handleClosePaymentModal() {
+    if (savingPaymentKey) {
+      return
+    }
+
+    setPaymentToRegister(null)
+    setPaidAt('')
+    setErrorMessage('')
+  }
+
+  async function handleRegisterPayment() {
+    if (!paymentToRegister || !paidAt) {
+      return
+    }
+
+    const paymentKey = `${paymentToRegister.year}-${paymentToRegister.month}`
+
+    try {
+      setSavingPaymentKey(paymentKey)
+      setErrorMessage('')
+
+      const response = await fetch(`${CUSTOMERS_URL}/${customerId}/payments`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          year: paymentToRegister.year,
+          month: paymentToRegister.month,
+          paidAt: new Date(`${paidAt}T00:00:00`).toISOString(),
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error('No se pudo registrar el pago.')
+      }
+
+      await onPaymentRegistered()
+      setPaymentToRegister(null)
+      setPaidAt('')
+    } catch (error) {
+      setErrorMessage(getErrorMessage(error))
+    } finally {
+      setSavingPaymentKey('')
+    }
+  }
 
   return (
     <Stack gap="md">
@@ -930,6 +976,8 @@ function PaymentsSection({
         </ThemeIcon>
         <Title order={2}>Pagos</Title>
       </Group>
+
+      {errorMessage ? <Alert color="red">{errorMessage}</Alert> : null}
 
       {years.length === 0 ? (
         <Text c="dimmed">Sin pagos registrados.</Text>
@@ -947,7 +995,7 @@ function PaymentsSection({
             const paymentRows = buildPaymentRows(
               year,
               paymentsByYear[year] ?? [],
-              billingStartedAt,
+              firstPaymentDate,
               dueDay,
             )
 
@@ -976,7 +1024,11 @@ function PaymentsSection({
                             {payment?.paidAt ? (
                               formatDate(payment.paidAt)
                             ) : (
-                              <Button size="xs" variant="light">
+                              <Button
+                                size="xs"
+                                variant="light"
+                                onClick={() => handleOpenPaymentModal(year, month)}
+                              >
                                 Registrar pago
                               </Button>
                             )}
@@ -991,6 +1043,52 @@ function PaymentsSection({
           })}
         </Tabs>
       )}
+
+      <Modal
+        opened={paymentToRegister !== null}
+        onClose={handleClosePaymentModal}
+        title="Registrar pago"
+        centered
+      >
+        <Stack gap="md">
+          <TextInput
+            label="Fecha de pago"
+            type="date"
+            value={paidAt}
+            onChange={(event) => setPaidAt(event.currentTarget.value)}
+            required
+          />
+
+          {paymentToRegister ? (
+            <Text size="sm" c="dimmed">
+              {monthLabels[paymentToRegister.month - 1]} {paymentToRegister.year}
+            </Text>
+          ) : null}
+
+          {errorMessage ? <Alert color="red">{errorMessage}</Alert> : null}
+
+          <Group justify="flex-end">
+            <Button
+              variant="default"
+              onClick={handleClosePaymentModal}
+              disabled={savingPaymentKey !== ''}
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleRegisterPayment}
+              loading={
+                paymentToRegister !== null &&
+                savingPaymentKey ===
+                  `${paymentToRegister.year}-${paymentToRegister.month}`
+              }
+              disabled={!paidAt}
+            >
+              Guardar
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
     </Stack>
   )
 }
@@ -1216,8 +1314,9 @@ export function CustomerDetailPage() {
               <Divider />
 
               <PaymentsSection
-                billingStartedAt={data.customer.billingStartedAt}
+                customerId={data.customer.id}
                 dueDay={data.debt.dueDay}
+                onPaymentRegistered={refreshCustomerDetail}
                 payments={data.payments}
               />
             </Stack>
