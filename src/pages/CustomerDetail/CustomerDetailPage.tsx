@@ -17,6 +17,7 @@ import {
   Stack,
   Table,
   Text,
+  Textarea,
   ThemeIcon,
   Title,
 } from '@mantine/core'
@@ -52,6 +53,12 @@ type ContactModalData = {
   href: string
 }
 
+type ActionTypeOption = {
+  value: CustomerActionType
+  label: string
+  icon: typeof IconPhone
+}
+
 const companyTypeLabels: Record<CompanyType, string> = {
   enterprise: 'Empresa',
   pyme: 'PyME',
@@ -64,6 +71,17 @@ const actionTypeLabels: Record<CustomerActionType, string> = {
   personal_visit: 'Visita personal',
   other: 'Otra accion',
 }
+
+const actionTypeOptions: ActionTypeOption[] = [
+  { value: 'call', label: actionTypeLabels.call, icon: IconPhone },
+  { value: 'email', label: actionTypeLabels.email, icon: IconMail },
+  {
+    value: 'personal_visit',
+    label: actionTypeLabels.personal_visit,
+    icon: IconMapPin,
+  },
+  { value: 'other', label: actionTypeLabels.other, icon: IconMessageCircle },
+]
 
 const monthLabels = [
   'Enero',
@@ -180,7 +198,122 @@ function ContactModal({
   )
 }
 
-function ActionsSection({ actions }: { actions: CustomerAction[] }) {
+function AddActionModal({
+  customerId,
+  opened,
+  onClose,
+  onSaved,
+}: {
+  customerId: number
+  opened: boolean
+  onClose: () => void
+  onSaved: () => Promise<void>
+}) {
+  const [type, setType] = useState<CustomerActionType>('personal_visit')
+  const [comments, setComments] = useState('')
+  const [isSaving, setIsSaving] = useState(false)
+  const [errorMessage, setErrorMessage] = useState('')
+
+  async function handleSave() {
+    try {
+      setIsSaving(true)
+      setErrorMessage('')
+
+      const response = await fetch(`${CUSTOMERS_URL}/${customerId}/actions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          type,
+          comments,
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error('No se pudo agregar la accion.')
+      }
+
+      await onSaved()
+      setType('personal_visit')
+      setComments('')
+      onClose()
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error ? error.message : 'Ocurrio un error inesperado.',
+      )
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  function handleCancel() {
+    setErrorMessage('')
+    onClose()
+  }
+
+  return (
+    <Modal opened={opened} onClose={handleCancel} title="Agregar acción" centered>
+      <Stack gap="md">
+        <div>
+          <Text size="sm" fw={500} mb="xs">
+            Tipo
+          </Text>
+          <SimpleGrid cols={{ base: 2, sm: 4 }}>
+            {actionTypeOptions.map((option) => {
+              const OptionIcon = option.icon
+              const isSelected = option.value === type
+
+              return (
+                <Button
+                  key={option.value}
+                  variant={isSelected ? 'filled' : 'light'}
+                  h="auto"
+                  py="sm"
+                  onClick={() => setType(option.value)}
+                >
+                  <Stack align="center" gap={4}>
+                    <OptionIcon size={20} />
+                    <Text size="xs" fw={700}>
+                      {option.label}
+                    </Text>
+                  </Stack>
+                </Button>
+              )
+            })}
+          </SimpleGrid>
+        </div>
+
+        <Textarea
+          label="Comentarios"
+          minRows={5}
+          autosize={false}
+          value={comments}
+          onChange={(event) => setComments(event.currentTarget.value)}
+        />
+
+        {errorMessage ? <Alert color="red">{errorMessage}</Alert> : null}
+
+        <Group justify="flex-end">
+          <Button variant="default" onClick={handleCancel} disabled={isSaving}>
+            Cancelar
+          </Button>
+          <Button onClick={handleSave} loading={isSaving}>
+            Guardar
+          </Button>
+        </Group>
+      </Stack>
+    </Modal>
+  )
+}
+
+function ActionsSection({
+  actions,
+  onAddAction,
+}: {
+  actions: CustomerAction[]
+  onAddAction: () => void
+}) {
   const sortedActions = [...actions].sort(
     (a, b) =>
       new Date(b.actionDate).getTime() - new Date(a.actionDate).getTime(),
@@ -188,7 +321,10 @@ function ActionsSection({ actions }: { actions: CustomerAction[] }) {
 
   return (
     <Stack gap="md">
-      <Title order={2}>Acciones</Title>
+      <Group justify="space-between">
+        <Title order={2}>Acciones</Title>
+        <Button onClick={onAddAction}>Agregar acción</Button>
+      </Group>
 
       {sortedActions.length === 0 ? (
         <Text c="dimmed">Sin acciones registradas.</Text>
@@ -306,32 +442,40 @@ export function CustomerDetailPage() {
   const [contactModal, setContactModal] = useState<ContactModalData | null>(
     null,
   )
+  const [isActionModalOpen, setIsActionModalOpen] = useState(false)
+
+  async function fetchCustomerDetail(signal?: AbortSignal) {
+    if (!customerId) {
+      setStatus('error')
+      setErrorMessage('No se encontro el cliente solicitado.')
+      return
+    }
+
+    const response = await fetch(`${CUSTOMERS_URL}/${customerId}`, {
+      signal,
+    })
+
+    if (!response.ok) {
+      throw new Error('No se pudo obtener el detalle del cliente.')
+    }
+
+    const customerDetail = (await response.json()) as CustomerDetailResponse
+    setData(customerDetail)
+    setStatus('ok')
+  }
+
+  async function refreshCustomerDetail() {
+    await fetchCustomerDetail()
+  }
 
   useEffect(() => {
     const controller = new AbortController()
 
     async function fetchCustomer() {
-      if (!customerId) {
-        setStatus('error')
-        setErrorMessage('No se encontro el cliente solicitado.')
-        return
-      }
-
       try {
         setStatus('loading')
         setErrorMessage('')
-
-        const response = await fetch(`${CUSTOMERS_URL}/${customerId}`, {
-          signal: controller.signal,
-        })
-
-        if (!response.ok) {
-          throw new Error('No se pudo obtener el detalle del cliente.')
-        }
-
-        const customerDetail = (await response.json()) as CustomerDetailResponse
-        setData(customerDetail)
-        setStatus('ok')
+        await fetchCustomerDetail(controller.signal)
       } catch (error) {
         if (error instanceof DOMException && error.name === 'AbortError') {
           return
@@ -432,7 +576,10 @@ export function CustomerDetailPage() {
 
               <Divider />
 
-              <ActionsSection actions={data.actions} />
+              <ActionsSection
+                actions={data.actions}
+                onAddAction={() => setIsActionModalOpen(true)}
+              />
 
               <Divider />
 
@@ -450,6 +597,15 @@ export function CustomerDetailPage() {
           contact={contactModal}
           onClose={() => setContactModal(null)}
         />
+
+        {data ? (
+          <AddActionModal
+            customerId={data.customer.id}
+            opened={isActionModalOpen}
+            onClose={() => setIsActionModalOpen(false)}
+            onSaved={refreshCustomerDetail}
+          />
+        ) : null}
       </Stack>
     </Container>
   )
