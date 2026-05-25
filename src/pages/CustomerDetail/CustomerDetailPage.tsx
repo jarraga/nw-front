@@ -47,6 +47,7 @@ const currentMonth = currentDate.getMonth() + 1
 
 type ContactModalData = {
   label: string
+  actionLabel: string
   value: string
   href: string
 }
@@ -126,6 +127,7 @@ function InfoItem({ label, value }: { label: string; value: string }) {
 
 function ContactInfoItem({
   label,
+  actionLabel,
   value,
   href,
   onOpen,
@@ -139,7 +141,7 @@ function ContactInfoItem({
         variant="subtle"
         size="compact-sm"
         px={0}
-        onClick={() => onOpen({ label, value, href })}
+        onClick={() => onOpen({ label, actionLabel, value, href })}
       >
         {value}
       </Button>
@@ -167,7 +169,7 @@ function ContactModal({
             {contact.value}
           </Text>
 
-          <Anchor href={contact.href}>{contact.href}</Anchor>
+          <Anchor href={contact.href}>{contact.actionLabel}</Anchor>
 
           <Paper withBorder p="md" radius="md">
             <QRCodeSVG value={contact.href} size={220} />
@@ -387,12 +389,14 @@ export function CustomerDetailPage() {
                   />
                   <ContactInfoItem
                     label="Telefono"
+                    actionLabel="Llamar"
                     value={data.customer.phone}
                     href={`tel:${data.customer.phone}`}
                     onOpen={setContactModal}
                   />
                   <ContactInfoItem
                     label="Email"
+                    actionLabel="Enviar email"
                     value={data.customer.email}
                     href={`mailto:${data.customer.email}`}
                     onOpen={setContactModal}
