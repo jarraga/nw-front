@@ -301,6 +301,95 @@ function AddActionModal({
   )
 }
 
+function EditCommentsModal({
+  customerId,
+  initialComments,
+  opened,
+  onClose,
+  onSaved,
+}: {
+  customerId: number
+  initialComments: string
+  opened: boolean
+  onClose: () => void
+  onSaved: () => Promise<void>
+}) {
+  const [comments, setComments] = useState(initialComments)
+  const [isSaving, setIsSaving] = useState(false)
+  const [errorMessage, setErrorMessage] = useState('')
+
+  useEffect(() => {
+    if (opened) {
+      setComments(initialComments)
+      setErrorMessage('')
+    }
+  }, [initialComments, opened])
+
+  async function handleSave() {
+    try {
+      setIsSaving(true)
+      setErrorMessage('')
+
+      const response = await fetch(`${CUSTOMERS_URL}/${customerId}/comments`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          comments,
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error('No se pudieron actualizar los comentarios.')
+      }
+
+      await onSaved()
+      onClose()
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error ? error.message : 'Ocurrio un error inesperado.',
+      )
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  function handleCancel() {
+    setErrorMessage('')
+    onClose()
+  }
+
+  return (
+    <Modal
+      opened={opened}
+      onClose={handleCancel}
+      title="Editar comentarios"
+      centered
+    >
+      <Stack gap="md">
+        <Textarea
+          label="Comentarios"
+          rows={5}
+          value={comments}
+          onChange={(event) => setComments(event.currentTarget.value)}
+        />
+
+        {errorMessage ? <Alert color="red">{errorMessage}</Alert> : null}
+
+        <Group justify="flex-end">
+          <Button variant="default" onClick={handleCancel} disabled={isSaving}>
+            Cancelar
+          </Button>
+          <Button onClick={handleSave} loading={isSaving}>
+            Guardar
+          </Button>
+        </Group>
+      </Stack>
+    </Modal>
+  )
+}
+
 function ActionsSection({
   actions,
   onAddAction,
@@ -437,6 +526,7 @@ export function CustomerDetailPage() {
     null,
   )
   const [isActionModalOpen, setIsActionModalOpen] = useState(false)
+  const [isCommentsModalOpen, setIsCommentsModalOpen] = useState(false)
 
   async function fetchCustomerDetail(signal?: AbortSignal) {
     if (!customerId) {
@@ -553,11 +643,19 @@ export function CustomerDetailPage() {
               <Divider />
 
               <Stack gap="xs">
-                <Group gap="xs">
-                  <ThemeIcon variant="light" radius="md">
-                    <IconBriefcase size={18} />
-                  </ThemeIcon>
-                  <Title order={2}>Comentarios</Title>
+                <Group justify="space-between" align="center">
+                  <Group gap="xs">
+                    <ThemeIcon variant="light" radius="md">
+                      <IconBriefcase size={18} />
+                    </ThemeIcon>
+                    <Title order={2}>Comentarios</Title>
+                  </Group>
+                  <Button
+                    variant="light"
+                    onClick={() => setIsCommentsModalOpen(true)}
+                  >
+                    Editar
+                  </Button>
                 </Group>
                 <Text c={data.customer.comments ? undefined : 'dimmed'}>
                   {data.customer.comments || 'Sin comentarios.'}
@@ -593,6 +691,16 @@ export function CustomerDetailPage() {
             customerId={data.customer.id}
             opened={isActionModalOpen}
             onClose={() => setIsActionModalOpen(false)}
+            onSaved={refreshCustomerDetail}
+          />
+        ) : null}
+
+        {data ? (
+          <EditCommentsModal
+            customerId={data.customer.id}
+            initialComments={data.customer.comments}
+            opened={isCommentsModalOpen}
+            onClose={() => setIsCommentsModalOpen(false)}
             onSaved={refreshCustomerDetail}
           />
         ) : null}
