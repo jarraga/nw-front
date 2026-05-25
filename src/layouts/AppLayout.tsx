@@ -13,7 +13,7 @@ export function AppLayout() {
     <AppShell header={{ height: 64 }} padding="md">
       <AppShell.Header>
         <Group h="100%" px="md" justify="space-between">
-          <Title order={3}>NW Front</Title>
+          <Title order={3}>Northwind | Cobranzas</Title>
 
           <Group gap="xs">
             {navItems.map((item) => (
