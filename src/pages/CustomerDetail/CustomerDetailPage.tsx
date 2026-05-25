@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom'
 import {
   Alert,
   Anchor,
+  ActionIcon as MantineActionIcon,
   Badge,
   Button,
   Card,
@@ -15,6 +16,7 @@ import {
   Paper,
   SimpleGrid,
   Stack,
+  Tabs,
   Table,
   Text,
   Textarea,
@@ -23,11 +25,13 @@ import {
 } from '@mantine/core'
 import { QRCodeSVG } from 'qrcode.react'
 import {
-  IconBriefcase,
   IconCalendarDollar,
+  IconDots,
+  IconInfoCircle,
   IconMail,
   IconMapPin,
-  IconMessageCircle,
+  IconNotes,
+  IconPencil,
   IconPhone,
 } from '@tabler/icons-react'
 
@@ -80,7 +84,7 @@ const actionTypeOptions: ActionTypeOption[] = [
     label: actionTypeLabels.personal_visit,
     icon: IconMapPin,
   },
-  { value: 'other', label: actionTypeLabels.other, icon: IconMessageCircle },
+  { value: 'other', label: actionTypeLabels.other, icon: IconDots },
 ]
 
 const monthLabels = [
@@ -129,7 +133,7 @@ function getActionIcon(type: CustomerActionType) {
   if (type === 'email') return IconMail
   if (type === 'personal_visit') return IconMapPin
 
-  return IconMessageCircle
+  return IconDots
 }
 
 function InfoItem({ label, value }: { label: string; value: string }) {
@@ -390,17 +394,116 @@ function EditCommentsModal({
   )
 }
 
+function EditActionCommentsModal({
+  customerId,
+  action,
+  onClose,
+  onSaved,
+}: {
+  customerId: number
+  action: CustomerAction | null
+  onClose: () => void
+  onSaved: () => Promise<void>
+}) {
+  const [comments, setComments] = useState(action?.comments ?? '')
+  const [isSaving, setIsSaving] = useState(false)
+  const [errorMessage, setErrorMessage] = useState('')
+
+  useEffect(() => {
+    if (action) {
+      setComments(action.comments)
+      setErrorMessage('')
+    }
+  }, [action])
+
+  async function handleSave() {
+    if (!action) {
+      return
+    }
+
+    try {
+      setIsSaving(true)
+      setErrorMessage('')
+
+      const response = await fetch(
+        `${CUSTOMERS_URL}/${customerId}/actions/${action.id}/comments`,
+        {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            comments,
+          }),
+        },
+      )
+
+      if (!response.ok) {
+        throw new Error('No se pudo actualizar el comentario de la accion.')
+      }
+
+      await onSaved()
+      onClose()
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error ? error.message : 'Ocurrio un error inesperado.',
+      )
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  function handleCancel() {
+    setErrorMessage('')
+    onClose()
+  }
+
+  return (
+    <Modal
+      opened={action !== null}
+      onClose={handleCancel}
+      title="Editar comentario de accion"
+      centered
+    >
+      <Stack gap="md">
+        <Textarea
+          label="Comentarios"
+          rows={5}
+          value={comments}
+          onChange={(event) => setComments(event.currentTarget.value)}
+        />
+
+        {errorMessage ? <Alert color="red">{errorMessage}</Alert> : null}
+
+        <Group justify="flex-end">
+          <Button variant="default" onClick={handleCancel} disabled={isSaving}>
+            Cancelar
+          </Button>
+          <Button onClick={handleSave} loading={isSaving}>
+            Guardar
+          </Button>
+        </Group>
+      </Stack>
+    </Modal>
+  )
+}
+
 function ActionsSection({
   actions,
   onAddAction,
+  onEditAction,
 }: {
   actions: CustomerAction[]
   onAddAction: () => void
+  onEditAction: (action: CustomerAction) => void
 }) {
+  const [showAllActions, setShowAllActions] = useState(false)
   const sortedActions = [...actions].sort(
     (a, b) =>
       new Date(b.actionDate).getTime() - new Date(a.actionDate).getTime(),
   )
+  const visibleActions = showAllActions ? sortedActions : sortedActions.slice(0, 3)
+  const hasHiddenActions = sortedActions.length > 3
 
   return (
     <Stack gap="md">
@@ -412,31 +515,66 @@ function ActionsSection({
       {sortedActions.length === 0 ? (
         <Text c="dimmed">Sin acciones registradas.</Text>
       ) : (
-        <SimpleGrid cols={{ base: 1, md: 2 }}>
-          {sortedActions.map((action) => {
-            const ActionIcon = getActionIcon(action.type)
+        <Stack gap="md">
+          {visibleActions.map((action) => {
+            const ActionTypeIcon = getActionIcon(action.type)
 
             return (
-              <Card key={action.id} withBorder radius="md" p="md">
-                <Group align="flex-start" gap="md">
-                  <ThemeIcon variant="light" size="lg" radius="md">
-                    <ActionIcon size={20} />
-                  </ThemeIcon>
+              <Card
+                key={action.id}
+                withBorder
+                radius="md"
+                p="lg"
+                pr="3.5rem"
+                style={{ position: 'relative' }}
+              >
+                <MantineActionIcon
+                  variant="subtle"
+                  aria-label="Editar comentario"
+                  style={{
+                    position: 'absolute',
+                    right: 12,
+                    top: 12,
+                    zIndex: 1,
+                  }}
+                  onClick={() => onEditAction(action)}
+                >
+                  <IconPencil size={18} />
+                </MantineActionIcon>
 
-                  <Stack gap={4}>
-                    <Group gap="xs">
+                <Stack gap="md">
+                  <Group align="center" gap="md" wrap="nowrap">
+                    <ThemeIcon variant="light" size="lg" radius="md">
+                      <ActionTypeIcon size={20} />
+                    </ThemeIcon>
+
+                    <Group gap="xs" wrap="wrap">
                       <Text fw={700}>{actionTypeLabels[action.type]}</Text>
-                      <Badge variant="light">{formatDateTime(action.actionDate)}</Badge>
+                      <Badge variant="light">
+                        {formatDateTime(action.actionDate)}
+                      </Badge>
                     </Group>
-                    <Text c={action.comments ? undefined : 'dimmed'}>
-                      {action.comments || 'Sin comentarios.'}
-                    </Text>
-                  </Stack>
-                </Group>
+                  </Group>
+
+                  <Text c={action.comments ? undefined : 'dimmed'} lh={1.6}>
+                    {action.comments || 'Sin comentarios.'}
+                  </Text>
+                </Stack>
               </Card>
             )
           })}
-        </SimpleGrid>
+
+          {hasHiddenActions ? (
+            <Group justify="center">
+              <Button
+                variant="subtle"
+                onClick={() => setShowAllActions((current) => !current)}
+              >
+                {showAllActions ? 'Mostrar menos' : 'Mostrar más'}
+              </Button>
+            </Group>
+          ) : null}
+        </Stack>
       )}
     </Stack>
   )
@@ -472,46 +610,66 @@ function PaymentsSection({ payments }: { payments: CustomerPayment[] }) {
   const paymentsByYear = useMemo(() => groupPaymentsByYear(payments), [payments])
   const years = Array.from(
     new Set([...Object.keys(paymentsByYear).map(Number), currentYear]),
-  ).sort((a, b) => b - a)
+  ).sort((a, b) => a - b)
+  const defaultYear = years.at(-1)?.toString()
 
   return (
     <Stack gap="md">
-      <Title order={2}>Pagos</Title>
+      <Group gap="xs">
+        <ThemeIcon variant="light" radius="md">
+          <IconCalendarDollar size={18} />
+        </ThemeIcon>
+        <Title order={2}>Pagos</Title>
+      </Group>
 
       {years.length === 0 ? (
         <Text c="dimmed">Sin pagos registrados.</Text>
       ) : (
-        years.map((year) => (
-          <Stack key={year} gap="xs">
-            <Title order={3}>{year}</Title>
-            <Table striped withTableBorder withColumnBorders>
-              <Table.Thead>
-                <Table.Tr>
-                  <Table.Th>Mes</Table.Th>
-                  <Table.Th>Fecha de pago</Table.Th>
-                </Table.Tr>
-              </Table.Thead>
-              <Table.Tbody>
-                {buildPaymentRows(year, paymentsByYear[year] ?? []).map(
-                  ({ month, payment }) => (
-                    <Table.Tr key={payment?.id ?? `${year}-${month}`}>
-                      <Table.Td>{monthLabels[month - 1]}</Table.Td>
-                      <Table.Td>
-                        {payment?.paidAt ? (
-                          formatDate(payment.paidAt)
-                        ) : (
-                          <Button size="xs" variant="light">
-                            Registrar pago
-                          </Button>
-                        )}
-                      </Table.Td>
-                    </Table.Tr>
-                  ),
-                )}
-              </Table.Tbody>
-            </Table>
-          </Stack>
-        ))
+        <Tabs defaultValue={defaultYear}>
+          <Tabs.List>
+            {years.map((year) => (
+              <Tabs.Tab key={year} value={year.toString()}>
+                {year}
+              </Tabs.Tab>
+            ))}
+          </Tabs.List>
+
+          {years.map((year) => (
+            <Tabs.Panel key={year} value={year.toString()} pt="md">
+              <Table
+                striped
+                withTableBorder
+                withColumnBorders
+                className="table-fixed"
+              >
+                <Table.Thead>
+                  <Table.Tr>
+                    <Table.Th className="w-1/2">Mes</Table.Th>
+                    <Table.Th className="w-1/2">Fecha de pago</Table.Th>
+                  </Table.Tr>
+                </Table.Thead>
+                <Table.Tbody>
+                  {buildPaymentRows(year, paymentsByYear[year] ?? []).map(
+                    ({ month, payment }) => (
+                      <Table.Tr key={payment?.id ?? `${year}-${month}`}>
+                        <Table.Td>{monthLabels[month - 1]}</Table.Td>
+                        <Table.Td>
+                          {payment?.paidAt ? (
+                            formatDate(payment.paidAt)
+                          ) : (
+                            <Button size="xs" variant="light">
+                              Registrar pago
+                            </Button>
+                          )}
+                        </Table.Td>
+                      </Table.Tr>
+                    ),
+                  )}
+                </Table.Tbody>
+              </Table>
+            </Tabs.Panel>
+          ))}
+        </Tabs>
       )}
     </Stack>
   )
@@ -527,6 +685,9 @@ export function CustomerDetailPage() {
   )
   const [isActionModalOpen, setIsActionModalOpen] = useState(false)
   const [isCommentsModalOpen, setIsCommentsModalOpen] = useState(false)
+  const [editingAction, setEditingAction] = useState<CustomerAction | null>(
+    null,
+  )
 
   async function fetchCustomerDetail(signal?: AbortSignal) {
     if (!customerId) {
@@ -609,7 +770,12 @@ export function CustomerDetailPage() {
               </div>
 
               <Stack gap="md">
-                <Title order={2}>Info</Title>
+                <Group gap="xs">
+                  <ThemeIcon variant="light" radius="md">
+                    <IconInfoCircle size={18} />
+                  </ThemeIcon>
+                  <Title order={2}>Info</Title>
+                </Group>
                 <SimpleGrid cols={{ base: 1, sm: 2, md: 3 }}>
                   <InfoItem
                     label="Tipo de empresa"
@@ -646,7 +812,7 @@ export function CustomerDetailPage() {
                 <Group justify="space-between" align="center">
                   <Group gap="xs">
                     <ThemeIcon variant="light" radius="md">
-                      <IconBriefcase size={18} />
+                      <IconNotes size={18} />
                     </ThemeIcon>
                     <Title order={2}>Comentarios</Title>
                   </Group>
@@ -667,16 +833,12 @@ export function CustomerDetailPage() {
               <ActionsSection
                 actions={data.actions}
                 onAddAction={() => setIsActionModalOpen(true)}
+                onEditAction={setEditingAction}
               />
 
               <Divider />
 
-              <Group gap="xs">
-                <ThemeIcon variant="light" radius="md">
-                  <IconCalendarDollar size={18} />
-                </ThemeIcon>
-                <PaymentsSection payments={data.payments} />
-              </Group>
+              <PaymentsSection payments={data.payments} />
             </Stack>
           </Paper>
         ) : null}
@@ -701,6 +863,15 @@ export function CustomerDetailPage() {
             initialComments={data.customer.comments}
             opened={isCommentsModalOpen}
             onClose={() => setIsCommentsModalOpen(false)}
+            onSaved={refreshCustomerDetail}
+          />
+        ) : null}
+
+        {data ? (
+          <EditActionCommentsModal
+            customerId={data.customer.id}
+            action={editingAction}
+            onClose={() => setEditingAction(null)}
             onSaved={refreshCustomerDetail}
           />
         ) : null}
