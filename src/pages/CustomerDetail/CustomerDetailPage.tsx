@@ -37,6 +37,8 @@ import {
   IconTrash,
 } from '@tabler/icons-react'
 
+import { CustomerViewersAvatars } from '../../customer-viewers/CustomerViewersAvatars'
+import { useCustomerViewers } from '../../customer-viewers/CustomerViewers'
 import { routePaths } from '../../routes/paths'
 import { useInformantSession } from '../../session/InformantSession'
 import type { AsyncStatus } from '../../types/async-status'
@@ -799,6 +801,8 @@ function PaymentsSection({ payments }: { payments: CustomerPayment[] }) {
 export function CustomerDetailPage() {
   const { customerId } = useParams()
   const { informantName } = useInformantSession()
+  const { getCustomerViewers, notifyCustomerLeave, notifyCustomerView } =
+    useCustomerViewers()
   const [status, setStatus] = useState<AsyncStatus>('loading')
   const [data, setData] = useState<CustomerDetailResponse | null>(null)
   const [errorMessage, setErrorMessage] = useState('')
@@ -861,6 +865,22 @@ export function CustomerDetailPage() {
     return () => controller.abort()
   }, [customerId])
 
+  useEffect(() => {
+    const parsedCustomerID = customerId ? Number(customerId) : NaN
+
+    if (Number.isFinite(parsedCustomerID)) {
+      notifyCustomerView(parsedCustomerID)
+    }
+
+    return () => {
+      notifyCustomerLeave()
+    }
+  }, [customerId, notifyCustomerLeave, notifyCustomerView])
+
+  const currentCustomerViewers = data
+    ? getCustomerViewers(data.customer.id)
+    : []
+
   return (
     <Container size="lg" py="xl">
       <Stack gap="lg">
@@ -884,7 +904,10 @@ export function CustomerDetailPage() {
           <Paper withBorder radius="md" p="xl" className="bg-white">
             <Stack gap="xl">
               <div>
-                <Title order={1}>{data.customer.companyName}</Title>
+                <Group align="center" gap="sm">
+                  <Title order={1}>{data.customer.companyName}</Title>
+                  <CustomerViewersAvatars viewers={currentCustomerViewers} />
+                </Group>
                 <Text mt="xs" c="dimmed">
                   Detalle del cliente.
                 </Text>

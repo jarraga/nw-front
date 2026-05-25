@@ -1,12 +1,15 @@
 import { RouterProvider } from 'react-router-dom'
 
+import { CustomerViewersProvider } from './customer-viewers/CustomerViewers'
 import { router } from './routes/router'
 import { InformantSessionProvider } from './session/InformantSession'
 
 function App() {
   return (
     <InformantSessionProvider>
-      <RouterProvider router={router} />
+      <CustomerViewersProvider>
+        <RouterProvider router={router} />
+      </CustomerViewersProvider>
     </InformantSessionProvider>
   )
 }

@@ -17,6 +17,8 @@ import {
   Title,
 } from '@mantine/core'
 
+import { CustomerViewersAvatars } from '../../customer-viewers/CustomerViewersAvatars'
+import { useCustomerViewers } from '../../customer-viewers/CustomerViewers'
 import { routePaths } from '../../routes/paths'
 import type { AsyncStatus } from '../../types/async-status'
 import type {
@@ -72,12 +74,15 @@ function buildCustomersUrl(
 }
 
 function CustomersTable({ customers }: { customers: CustomerDebt[] }) {
+  const { getCustomerViewers } = useCustomerViewers()
+
   return (
     <ScrollArea>
       <Table striped highlightOnHover withTableBorder withColumnBorders>
         <Table.Thead>
           <Table.Tr>
             <Table.Th>Empresa</Table.Th>
+            <Table.Th ta="center">Viendo</Table.Th>
             <Table.Th>Tipo de empresa</Table.Th>
             <Table.Th>Telefono</Table.Th>
             <Table.Th>Email</Table.Th>
@@ -88,22 +93,32 @@ function CustomersTable({ customers }: { customers: CustomerDebt[] }) {
           </Table.Tr>
         </Table.Thead>
         <Table.Tbody>
-          {customers.map((customer) => (
-            <Table.Tr key={customer.id}>
-              <Table.Td>
-                <Anchor component={Link} to={routePaths.customerDetail(customer.id)}>
-                  {customer.companyName}
-                </Anchor>
-              </Table.Td>
-              <Table.Td>{companyTypeLabels[customer.companyType]}</Table.Td>
-              <Table.Td>{customer.phone}</Table.Td>
-              <Table.Td>{customer.email}</Table.Td>
-              <Table.Td>{currencyFormatter.format(customer.monthlyFee)}</Table.Td>
-              <Table.Td>{formatDate(customer.billingStartedAt)}</Table.Td>
-              <Table.Td>{numberFormatter.format(customer.overdueMonths)}</Table.Td>
-              <Table.Td>{currencyFormatter.format(customer.overdueAmount)}</Table.Td>
-            </Table.Tr>
-          ))}
+          {customers.map((customer) => {
+            const viewers = getCustomerViewers(customer.id)
+
+            return (
+              <Table.Tr
+                key={customer.id}
+                bg={viewers.length > 0 ? 'blue.0' : undefined}
+              >
+                <Table.Td>
+                  <Anchor component={Link} to={routePaths.customerDetail(customer.id)}>
+                    {customer.companyName}
+                  </Anchor>
+                </Table.Td>
+                <Table.Td ta="center">
+                  <CustomerViewersAvatars justify="center" viewers={viewers} />
+                </Table.Td>
+                <Table.Td>{companyTypeLabels[customer.companyType]}</Table.Td>
+                <Table.Td>{customer.phone}</Table.Td>
+                <Table.Td>{customer.email}</Table.Td>
+                <Table.Td>{currencyFormatter.format(customer.monthlyFee)}</Table.Td>
+                <Table.Td>{formatDate(customer.billingStartedAt)}</Table.Td>
+                <Table.Td>{numberFormatter.format(customer.overdueMonths)}</Table.Td>
+                <Table.Td>{currencyFormatter.format(customer.overdueAmount)}</Table.Td>
+              </Table.Tr>
+            )
+          })}
         </Table.Tbody>
       </Table>
     </ScrollArea>
