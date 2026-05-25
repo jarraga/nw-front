@@ -57,9 +57,10 @@ function buildCustomersUrl(
   sortBy: CustomerDebtSortBy,
   companyType: CompanyType | typeof ALL_COMPANY_TYPES,
 ) {
+  const offset = (page - 1) * PAGE_SIZE
   const url = new URL(CUSTOMERS_DEBT_LIST_URL)
   url.searchParams.set('limit', PAGE_SIZE.toString())
-  url.searchParams.set('page', page.toString())
+  url.searchParams.set('offset', offset.toString())
   url.searchParams.set('sortBy', sortBy)
 
   if (companyType !== ALL_COMPANY_TYPES) {
