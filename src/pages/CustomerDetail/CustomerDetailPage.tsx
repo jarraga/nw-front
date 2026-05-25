@@ -20,6 +20,7 @@ import {
   Table,
   Text,
   Textarea,
+  TextInput,
   ThemeIcon,
   Title,
 } from '@mantine/core'
@@ -217,6 +218,117 @@ function ContactModal({
           </Paper>
         </Stack>
       ) : null}
+    </Modal>
+  )
+}
+
+function EditCustomerModal({
+  customer,
+  opened,
+  onClose,
+  onSaved,
+}: {
+  customer: CustomerDetailResponse['customer'] | null
+  opened: boolean
+  onClose: () => void
+  onSaved: () => Promise<void>
+}) {
+  const [phone, setPhone] = useState('')
+  const [email, setEmail] = useState('')
+  const [monthlyFee, setMonthlyFee] = useState('')
+  const [isSaving, setIsSaving] = useState(false)
+  const [errorMessage, setErrorMessage] = useState('')
+
+  useEffect(() => {
+    if (opened && customer) {
+      setPhone(customer.phone)
+      setEmail(customer.email)
+      setMonthlyFee(customer.monthlyFee.toString())
+      setErrorMessage('')
+    }
+  }, [customer, opened])
+
+  async function handleSave() {
+    if (!customer) {
+      return
+    }
+
+    const parsedMonthlyFee = Number(monthlyFee)
+
+    if (!Number.isFinite(parsedMonthlyFee)) {
+      setErrorMessage('El abono mensual no es valido.')
+      return
+    }
+
+    try {
+      setIsSaving(true)
+      setErrorMessage('')
+
+      const response = await fetch(`${CUSTOMERS_URL}/${customer.id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          phone,
+          email,
+          monthlyFee: parsedMonthlyFee,
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error('No se pudo actualizar el cliente.')
+      }
+
+      await onSaved()
+      onClose()
+    } catch (error) {
+      setErrorMessage(getErrorMessage(error))
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  function handleCancel() {
+    setErrorMessage('')
+    onClose()
+  }
+
+  return (
+    <Modal opened={opened} onClose={handleCancel} title="Editar cliente" centered>
+      <Stack gap="md">
+        <TextInput
+          label="Telefono"
+          value={phone}
+          onChange={(event) => setPhone(event.currentTarget.value)}
+        />
+
+        <TextInput
+          label="Email"
+          type="email"
+          value={email}
+          onChange={(event) => setEmail(event.currentTarget.value)}
+        />
+
+        <TextInput
+          label="Abono mensual"
+          type="number"
+          min={0}
+          value={monthlyFee}
+          onChange={(event) => setMonthlyFee(event.currentTarget.value)}
+        />
+
+        {errorMessage ? <Alert color="red">{errorMessage}</Alert> : null}
+
+        <Group justify="flex-end">
+          <Button variant="default" onClick={handleCancel} disabled={isSaving}>
+            Cancelar
+          </Button>
+          <Button onClick={handleSave} loading={isSaving}>
+            Guardar
+          </Button>
+        </Group>
+      </Stack>
     </Modal>
   )
 }
@@ -894,6 +1006,7 @@ export function CustomerDetailPage() {
   const [contactModal, setContactModal] = useState<ContactModalData | null>(
     null,
   )
+  const [isEditCustomerModalOpen, setIsEditCustomerModalOpen] = useState(false)
   const [isActionModalOpen, setIsActionModalOpen] = useState(false)
   const [isCommentsModalOpen, setIsCommentsModalOpen] = useState(false)
   const [editingAction, setEditingAction] = useState<CustomerAction | null>(
@@ -988,15 +1101,24 @@ export function CustomerDetailPage() {
         {status === 'ok' && data ? (
           <Paper withBorder radius="md" p="xl" className="bg-white">
             <Stack gap="xl">
-              <div>
-                <Group align="center" gap="sm">
-                  <Title order={1}>{data.customer.companyName}</Title>
-                  <CustomerViewersAvatars viewers={currentCustomerViewers} />
-                </Group>
-                <Text mt="xs" c="dimmed">
-                  Detalle del cliente.
-                </Text>
-              </div>
+              <Group justify="space-between" align="flex-start">
+                <div>
+                  <Group align="center" gap="sm">
+                    <Title order={1}>{data.customer.companyName}</Title>
+                    <CustomerViewersAvatars viewers={currentCustomerViewers} />
+                  </Group>
+                  <Text mt="xs" c="dimmed">
+                    Detalle del cliente.
+                  </Text>
+                </div>
+
+                <Button
+                  variant="light"
+                  onClick={() => setIsEditCustomerModalOpen(true)}
+                >
+                  Editar
+                </Button>
+              </Group>
 
               <Stack gap="md">
                 <Group gap="xs">
@@ -1106,6 +1228,15 @@ export function CustomerDetailPage() {
           contact={contactModal}
           onClose={() => setContactModal(null)}
         />
+
+        {data ? (
+          <EditCustomerModal
+            customer={data.customer}
+            opened={isEditCustomerModalOpen}
+            onClose={() => setIsEditCustomerModalOpen(false)}
+            onSaved={refreshCustomerDetail}
+          />
+        ) : null}
 
         {data ? (
           <AddActionModal

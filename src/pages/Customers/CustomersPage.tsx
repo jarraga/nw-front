@@ -496,7 +496,12 @@ export function CustomersPage() {
             {status === 'ok' ? (
               <Text fw={600}>{numberFormatter.format(total)} clientes</Text>
             ) : null}
-            <Button onClick={() => setIsCreateModalOpen(true)}>Crear</Button>
+            <Button
+              variant="light"
+              onClick={() => setIsCreateModalOpen(true)}
+            >
+              Crear
+            </Button>
           </Group>
         </Group>
 
