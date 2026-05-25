@@ -11,6 +11,7 @@ import {
   Divider,
   Group,
   Loader,
+  Modal,
   Paper,
   SimpleGrid,
   Stack,
@@ -19,6 +20,7 @@ import {
   ThemeIcon,
   Title,
 } from '@mantine/core'
+import { QRCodeSVG } from 'qrcode.react'
 import {
   IconBriefcase,
   IconCalendarDollar,
@@ -42,6 +44,12 @@ const CUSTOMERS_URL = 'http://localhost:8080/customers'
 const currentDate = new Date()
 const currentYear = currentDate.getFullYear()
 const currentMonth = currentDate.getMonth() + 1
+
+type ContactModalData = {
+  label: string
+  value: string
+  href: string
+}
 
 const companyTypeLabels: Record<CompanyType, string> = {
   enterprise: 'Empresa',
@@ -113,6 +121,60 @@ function InfoItem({ label, value }: { label: string; value: string }) {
       </Text>
       <Text fw={600}>{value}</Text>
     </div>
+  )
+}
+
+function ContactInfoItem({
+  label,
+  value,
+  href,
+  onOpen,
+}: ContactModalData & { onOpen: (contact: ContactModalData) => void }) {
+  return (
+    <div>
+      <Text size="sm" c="dimmed">
+        {label}
+      </Text>
+      <Button
+        variant="subtle"
+        size="compact-sm"
+        px={0}
+        onClick={() => onOpen({ label, value, href })}
+      >
+        {value}
+      </Button>
+    </div>
+  )
+}
+
+function ContactModal({
+  contact,
+  onClose,
+}: {
+  contact: ContactModalData | null
+  onClose: () => void
+}) {
+  return (
+    <Modal
+      opened={contact !== null}
+      onClose={onClose}
+      title={contact?.label}
+      centered
+    >
+      {contact ? (
+        <Stack align="center" gap="md">
+          <Text fw={700} size="lg">
+            {contact.value}
+          </Text>
+
+          <Anchor href={contact.href}>{contact.href}</Anchor>
+
+          <Paper withBorder p="md" radius="md">
+            <QRCodeSVG value={contact.href} size={220} />
+          </Paper>
+        </Stack>
+      ) : null}
+    </Modal>
   )
 }
 
@@ -239,6 +301,9 @@ export function CustomerDetailPage() {
   const [status, setStatus] = useState<AsyncStatus>('loading')
   const [data, setData] = useState<CustomerDetailResponse | null>(null)
   const [errorMessage, setErrorMessage] = useState('')
+  const [contactModal, setContactModal] = useState<ContactModalData | null>(
+    null,
+  )
 
   useEffect(() => {
     const controller = new AbortController()
@@ -320,8 +385,18 @@ export function CustomerDetailPage() {
                     label="Tipo de empresa"
                     value={companyTypeLabels[data.customer.companyType]}
                   />
-                  <InfoItem label="Telefono" value={data.customer.phone} />
-                  <InfoItem label="Email" value={data.customer.email} />
+                  <ContactInfoItem
+                    label="Telefono"
+                    value={data.customer.phone}
+                    href={`tel:${data.customer.phone}`}
+                    onOpen={setContactModal}
+                  />
+                  <ContactInfoItem
+                    label="Email"
+                    value={data.customer.email}
+                    href={`mailto:${data.customer.email}`}
+                    onOpen={setContactModal}
+                  />
                   <InfoItem
                     label="Abono mensual"
                     value={currencyFormatter.format(data.customer.monthlyFee)}
@@ -366,6 +441,11 @@ export function CustomerDetailPage() {
             </Stack>
           </Paper>
         ) : null}
+
+        <ContactModal
+          contact={contactModal}
+          onClose={() => setContactModal(null)}
+        />
       </Stack>
     </Container>
   )
