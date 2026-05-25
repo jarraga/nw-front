@@ -281,8 +281,7 @@ function AddActionModal({
 
         <Textarea
           label="Comentarios"
-          minRows={5}
-          autosize={false}
+          rows={5}
           value={comments}
           onChange={(event) => setComments(event.currentTarget.value)}
         />
@@ -547,10 +546,6 @@ export function CustomerDetailPage() {
                   <InfoItem
                     label="Inicio de facturacion"
                     value={formatDate(data.customer.billingStartedAt)}
-                  />
-                  <InfoItem
-                    label="Fecha de alta"
-                    value={formatDateTime(data.customer.createdAt)}
                   />
                 </SimpleGrid>
               </Stack>
