@@ -52,8 +52,15 @@ export type CustomerPayment = {
   createdAt: string
 }
 
+export type CustomerDebtSummary = {
+  dueDay: number
+  overdueMonths: number
+  overdueAmount: number
+}
+
 export type CustomerDetailResponse = {
   customer: Customer
+  debt: CustomerDebtSummary
   actions: CustomerAction[]
   payments: CustomerPayment[]
 }

@@ -26,6 +26,7 @@ import {
 import { QRCodeSVG } from 'qrcode.react'
 import {
   IconCalendarDollar,
+  IconCash,
   IconDots,
   IconInfoCircle,
   IconMail,
@@ -33,6 +34,7 @@ import {
   IconNotes,
   IconPencil,
   IconPhone,
+  IconTrash,
 } from '@tabler/icons-react'
 
 import { routePaths } from '../../routes/paths'
@@ -107,6 +109,7 @@ const currencyFormatter = new Intl.NumberFormat('es-AR', {
   currency: 'ARS',
   maximumFractionDigits: 0,
 })
+const numberFormatter = new Intl.NumberFormat('es-AR')
 const dateFormatter = new Intl.DateTimeFormat('es-AR', {
   day: '2-digit',
   month: '2-digit',
@@ -143,6 +146,19 @@ function InfoItem({ label, value }: { label: string; value: string }) {
         {label}
       </Text>
       <Text fw={600}>{value}</Text>
+    </div>
+  )
+}
+
+function DebtInfoItem({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <Text size="sm" c="dimmed">
+        {label}
+      </Text>
+      <Text fw={700} size="xl">
+        {value}
+      </Text>
     </div>
   )
 }
@@ -488,14 +504,103 @@ function EditActionCommentsModal({
   )
 }
 
+function DeleteActionModal({
+  customerId,
+  action,
+  onClose,
+  onDeleted,
+}: {
+  customerId: number
+  action: CustomerAction | null
+  onClose: () => void
+  onDeleted: () => Promise<void>
+}) {
+  const [isDeleting, setIsDeleting] = useState(false)
+  const [errorMessage, setErrorMessage] = useState('')
+
+  useEffect(() => {
+    if (action) {
+      setErrorMessage('')
+    }
+  }, [action])
+
+  async function handleDelete() {
+    if (!action) {
+      return
+    }
+
+    try {
+      setIsDeleting(true)
+      setErrorMessage('')
+
+      const response = await fetch(
+        `${CUSTOMERS_URL}/${customerId}/actions/${action.id}`,
+        {
+          method: 'DELETE',
+        },
+      )
+
+      if (!response.ok) {
+        throw new Error('No se pudo eliminar la accion.')
+      }
+
+      await onDeleted()
+      onClose()
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error ? error.message : 'Ocurrio un error inesperado.',
+      )
+    } finally {
+      setIsDeleting(false)
+    }
+  }
+
+  function handleCancel() {
+    setErrorMessage('')
+    onClose()
+  }
+
+  return (
+    <Modal
+      opened={action !== null}
+      onClose={handleCancel}
+      title="Eliminar accion"
+      centered
+    >
+      <Stack gap="md">
+        <Text>¿Seguro que queres eliminar esta accion?</Text>
+
+        {action?.comments ? (
+          <Text c="dimmed" lineClamp={3}>
+            {action.comments}
+          </Text>
+        ) : null}
+
+        {errorMessage ? <Alert color="red">{errorMessage}</Alert> : null}
+
+        <Group justify="flex-end">
+          <Button variant="default" onClick={handleCancel} disabled={isDeleting}>
+            Cancelar
+          </Button>
+          <Button color="red" onClick={handleDelete} loading={isDeleting}>
+            Eliminar
+          </Button>
+        </Group>
+      </Stack>
+    </Modal>
+  )
+}
+
 function ActionsSection({
   actions,
   onAddAction,
   onEditAction,
+  onDeleteAction,
 }: {
   actions: CustomerAction[]
   onAddAction: () => void
   onEditAction: (action: CustomerAction) => void
+  onDeleteAction: (action: CustomerAction) => void
 }) {
   const [showAllActions, setShowAllActions] = useState(false)
   const sortedActions = [...actions].sort(
@@ -525,9 +630,23 @@ function ActionsSection({
                 withBorder
                 radius="md"
                 p="lg"
-                pr="3.5rem"
+                pr="5.5rem"
                 style={{ position: 'relative' }}
               >
+                <MantineActionIcon
+                  variant="subtle"
+                  color="gray"
+                  aria-label="Eliminar accion"
+                  style={{
+                    position: 'absolute',
+                    right: 48,
+                    top: 12,
+                    zIndex: 1,
+                  }}
+                  onClick={() => onDeleteAction(action)}
+                >
+                  <IconTrash size={18} />
+                </MantineActionIcon>
                 <MantineActionIcon
                   variant="subtle"
                   aria-label="Editar comentario"
@@ -688,6 +807,9 @@ export function CustomerDetailPage() {
   const [editingAction, setEditingAction] = useState<CustomerAction | null>(
     null,
   )
+  const [deletingAction, setDeletingAction] = useState<CustomerAction | null>(
+    null,
+  )
 
   async function fetchCustomerDetail(signal?: AbortSignal) {
     if (!customerId) {
@@ -808,6 +930,31 @@ export function CustomerDetailPage() {
 
               <Divider />
 
+              <Stack gap="md">
+                <Group gap="xs">
+                  <ThemeIcon variant="light" radius="md">
+                    <IconCash size={18} />
+                  </ThemeIcon>
+                  <Title order={2}>Deuda actual</Title>
+                </Group>
+                <SimpleGrid cols={{ base: 1, sm: 2, md: 3 }}>
+                  <DebtInfoItem
+                    label="Dia de vencimiento"
+                    value={numberFormatter.format(data.debt.dueDay)}
+                  />
+                  <DebtInfoItem
+                    label="Meses vencidos"
+                    value={numberFormatter.format(data.debt.overdueMonths)}
+                  />
+                  <DebtInfoItem
+                    label="Monto vencido"
+                    value={currencyFormatter.format(data.debt.overdueAmount)}
+                  />
+                </SimpleGrid>
+              </Stack>
+
+              <Divider />
+
               <Stack gap="xs">
                 <Group justify="space-between" align="center">
                   <Group gap="xs">
@@ -834,6 +981,7 @@ export function CustomerDetailPage() {
                 actions={data.actions}
                 onAddAction={() => setIsActionModalOpen(true)}
                 onEditAction={setEditingAction}
+                onDeleteAction={setDeletingAction}
               />
 
               <Divider />
@@ -873,6 +1021,15 @@ export function CustomerDetailPage() {
             action={editingAction}
             onClose={() => setEditingAction(null)}
             onSaved={refreshCustomerDetail}
+          />
+        ) : null}
+
+        {data ? (
+          <DeleteActionModal
+            customerId={data.customer.id}
+            action={deletingAction}
+            onClose={() => setDeletingAction(null)}
+            onDeleted={refreshCustomerDetail}
           />
         ) : null}
       </Stack>
