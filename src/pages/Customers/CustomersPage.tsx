@@ -1,19 +1,24 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
   Anchor,
   Alert,
+  Box,
   Center,
+  CloseButton,
   Container,
   Group,
   Loader,
+  LoadingOverlay,
   Pagination,
   Paper,
   Radio,
   ScrollArea,
   Select,
+  Switch,
   Table,
   Text,
+  TextInput,
   Title,
 } from '@mantine/core'
 
@@ -59,6 +64,8 @@ function buildCustomersUrl(
   page: number,
   sortBy: CustomerDebtSortBy,
   companyType: CompanyType | typeof ALL_COMPANY_TYPES,
+  companyName: string,
+  reviewed: boolean,
 ) {
   const offset = (page - 1) * PAGE_SIZE
   const url = new URL(CUSTOMERS_DEBT_LIST_URL)
@@ -68,6 +75,16 @@ function buildCustomersUrl(
 
   if (companyType !== ALL_COMPANY_TYPES) {
     url.searchParams.set('companyType', companyType)
+  }
+
+  const trimmedCompanyName = companyName.trim()
+
+  if (trimmedCompanyName) {
+    url.searchParams.set('companyName', trimmedCompanyName)
+  }
+
+  if (reviewed) {
+    url.searchParams.set('reviewed', 'true')
   }
 
   return url.toString()
@@ -82,14 +99,17 @@ function CustomersTable({ customers }: { customers: CustomerDebt[] }) {
         <Table.Thead>
           <Table.Tr>
             <Table.Th>Empresa</Table.Th>
-            <Table.Th ta="center">Viendo</Table.Th>
             <Table.Th>Tipo de empresa</Table.Th>
-            <Table.Th>Telefono</Table.Th>
-            <Table.Th>Email</Table.Th>
-            <Table.Th>Abono mensual</Table.Th>
             <Table.Th>Inicio de facturacion</Table.Th>
+            <Table.Th>Abono mensual</Table.Th>
             <Table.Th>Meses vencidos</Table.Th>
             <Table.Th>Monto vencido</Table.Th>
+            <Table.Th
+              ta="center"
+              style={{ width: 104, minWidth: 104, maxWidth: 104 }}
+            >
+              Viendo
+            </Table.Th>
           </Table.Tr>
         </Table.Thead>
         <Table.Tbody>
@@ -106,16 +126,21 @@ function CustomersTable({ customers }: { customers: CustomerDebt[] }) {
                     {customer.companyName}
                   </Anchor>
                 </Table.Td>
-                <Table.Td ta="center">
-                  <CustomerViewersAvatars justify="center" viewers={viewers} />
-                </Table.Td>
                 <Table.Td>{companyTypeLabels[customer.companyType]}</Table.Td>
-                <Table.Td>{customer.phone}</Table.Td>
-                <Table.Td>{customer.email}</Table.Td>
-                <Table.Td>{currencyFormatter.format(customer.monthlyFee)}</Table.Td>
                 <Table.Td>{formatDate(customer.billingStartedAt)}</Table.Td>
+                <Table.Td>{currencyFormatter.format(customer.monthlyFee)}</Table.Td>
                 <Table.Td>{numberFormatter.format(customer.overdueMonths)}</Table.Td>
                 <Table.Td>{currencyFormatter.format(customer.overdueAmount)}</Table.Td>
+                <Table.Td
+                  ta="center"
+                  style={{ width: 104, minWidth: 104, maxWidth: 104 }}
+                >
+                  <CustomerViewersAvatars
+                    justify="center"
+                    maxVisible={3}
+                    viewers={viewers}
+                  />
+                </Table.Td>
               </Table.Tr>
             )
           })}
@@ -126,16 +151,40 @@ function CustomersTable({ customers }: { customers: CustomerDebt[] }) {
 }
 
 export function CustomersPage() {
+  const companyNameInputRef = useRef<HTMLInputElement>(null)
+  const companyNameDebounceRef = useRef<number | null>(null)
   const [status, setStatus] = useState<AsyncStatus>('loading')
+  const [hasLoadedCustomers, setHasLoadedCustomers] = useState(false)
   const [customers, setCustomers] = useState<CustomerDebt[]>([])
   const [total, setTotal] = useState(0)
   const [activePage, setActivePage] = useState(1)
   const [sortBy, setSortBy] = useState<CustomerDebtSortBy>('amount')
+  const [companyName, setCompanyName] = useState('')
+  const [debouncedCompanyName, setDebouncedCompanyName] = useState('')
   const [companyType, setCompanyType] = useState<
     CompanyType | typeof ALL_COMPANY_TYPES
   >(ALL_COMPANY_TYPES)
+  const [reviewed, setReviewed] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
   const totalPages = Math.ceil(total / PAGE_SIZE)
+
+  useEffect(() => {
+    if (companyNameDebounceRef.current !== null) {
+      window.clearTimeout(companyNameDebounceRef.current)
+    }
+
+    companyNameDebounceRef.current = window.setTimeout(() => {
+      setDebouncedCompanyName(companyName)
+      companyNameDebounceRef.current = null
+    }, 500)
+
+    return () => {
+      if (companyNameDebounceRef.current !== null) {
+        window.clearTimeout(companyNameDebounceRef.current)
+        companyNameDebounceRef.current = null
+      }
+    }
+  }, [companyName])
 
   useEffect(() => {
     const controller = new AbortController()
@@ -146,7 +195,13 @@ export function CustomersPage() {
         setErrorMessage('')
 
         const response = await fetch(
-          buildCustomersUrl(activePage, sortBy, companyType),
+          buildCustomersUrl(
+            activePage,
+            sortBy,
+            companyType,
+            debouncedCompanyName,
+            reviewed,
+          ),
           {
             signal: controller.signal,
           },
@@ -159,6 +214,7 @@ export function CustomersPage() {
         const data = (await response.json()) as CustomerDebtListResponse
         setCustomers(data.items)
         setTotal(data.total)
+        setHasLoadedCustomers(true)
         setStatus('ok')
       } catch (error) {
         if (error instanceof DOMException && error.name === 'AbortError') {
@@ -173,7 +229,7 @@ export function CustomersPage() {
     void fetchCustomers()
 
     return () => controller.abort()
-  }, [activePage, sortBy, companyType])
+  }, [activePage, sortBy, companyType, debouncedCompanyName, reviewed])
 
   function handleSortChange(value: string) {
     setSortBy(value as CustomerDebtSortBy)
@@ -182,6 +238,28 @@ export function CustomersPage() {
 
   function handleCompanyTypeChange(value: string | null) {
     setCompanyType((value ?? ALL_COMPANY_TYPES) as CompanyType | typeof ALL_COMPANY_TYPES)
+    setActivePage(1)
+  }
+
+  function handleCompanyNameChange(value: string) {
+    setCompanyName(value)
+    setActivePage(1)
+  }
+
+  function handleClearCompanyName() {
+    if (companyNameDebounceRef.current !== null) {
+      window.clearTimeout(companyNameDebounceRef.current)
+      companyNameDebounceRef.current = null
+    }
+
+    setCompanyName('')
+    setDebouncedCompanyName('')
+    setActivePage(1)
+    companyNameInputRef.current?.focus()
+  }
+
+  function handleReviewedChange(value: boolean) {
+    setReviewed(value)
     setActivePage(1)
   }
 
@@ -201,7 +279,7 @@ export function CustomersPage() {
           ) : null}
         </Group>
 
-        {status === 'loading' ? (
+        {status === 'loading' && !hasLoadedCustomers ? (
           <Center py="xl">
             <Loader />
           </Center>
@@ -213,37 +291,104 @@ export function CustomersPage() {
           </Alert>
         ) : null}
 
-        {status === 'ok' ? (
-          <>
-            <Group align="flex-end" mb="md">
-              <Radio.Group
-                label="Ordenar por"
-                value={sortBy}
-                onChange={handleSortChange}
+        {status !== 'error' && hasLoadedCustomers ? (
+          <Box pos="relative">
+            <LoadingOverlay
+              visible={status === 'loading'}
+              overlayProps={{ blur: 1, radius: 'sm' }}
+            />
+
+            <Box
+              mb="md"
+              style={{
+                display: 'grid',
+                gridTemplateColumns:
+                  'minmax(180px, 1fr) minmax(280px, 1.6fr) minmax(200px, 1.1fr) minmax(140px, 0.8fr)',
+                width: '100%',
+              }}
+            >
+              <Box pr="md">
+                <TextInput
+                  ref={companyNameInputRef}
+                  label="Buscar empresa"
+                  value={companyName}
+                  onChange={(event) =>
+                    handleCompanyNameChange(event.currentTarget.value)
+                  }
+                  rightSection={
+                    companyName ? (
+                      <CloseButton
+                        aria-label="Borrar busqueda"
+                        onClick={handleClearCompanyName}
+                        onMouseDown={(event) => event.preventDefault()}
+                        size="sm"
+                      />
+                    ) : null
+                  }
+                />
+              </Box>
+
+              <Box px="md" style={{ borderLeft: '1px solid var(--mantine-color-gray-3)' }}>
+                <Radio.Group
+                  label="Ordenar por"
+                  value={sortBy}
+                  onChange={handleSortChange}
+                >
+                  <Group mt={8} wrap="nowrap">
+                    <Radio value="amount" label="Monto vencido" />
+                    <Radio value="months" label="Meses vencidos" />
+                  </Group>
+                </Radio.Group>
+              </Box>
+
+              <Box px="md" style={{ borderLeft: '1px solid var(--mantine-color-gray-3)' }}>
+                <Select
+                  label="Tipo de empresa"
+                  value={companyType}
+                  onChange={handleCompanyTypeChange}
+                  data={[
+                    { value: ALL_COMPANY_TYPES, label: 'Todos' },
+                    { value: 'enterprise', label: companyTypeLabels.enterprise },
+                    { value: 'pyme', label: companyTypeLabels.pyme },
+                    { value: 'startup', label: companyTypeLabels.startup },
+                  ]}
+                  allowDeselect={false}
+                />
+              </Box>
+
+              <Box
+                pl="md"
+                style={{
+                  alignItems: 'flex-start',
+                  flexDirection: 'column',
+                  borderLeft: '1px solid var(--mantine-color-gray-3)',
+                  display: 'flex',
+                  minHeight: 60,
+                }}
               >
-                <Group mt="xs">
-                  <Radio value="amount" label="Monto vencido" />
-                  <Radio value="months" label="Meses vencidos" />
-                </Group>
-              </Radio.Group>
+                <Text
+                  component="label"
+                  fw={500}
+                  mb={12}
+                  size="sm"
+                >
+                  Revisados
+                </Text>
+                <Switch
+                  label="Mostrar"
+                  checked={reviewed}
+                  onChange={(event) =>
+                    handleReviewedChange(event.currentTarget.checked)
+                  }
+                />
+              </Box>
+            </Box>
 
-              <Select
-                label="Tipo de empresa"
-                value={companyType}
-                onChange={handleCompanyTypeChange}
-                data={[
-                  { value: ALL_COMPANY_TYPES, label: 'Todos' },
-                  { value: 'enterprise', label: companyTypeLabels.enterprise },
-                  { value: 'pyme', label: companyTypeLabels.pyme },
-                  { value: 'startup', label: companyTypeLabels.startup },
-                ]}
-                allowDeselect={false}
-              />
-            </Group>
+            {customers.length > 0 ? (
+              <CustomersTable customers={customers} />
+            ) : null}
 
-            <CustomersTable customers={customers} />
-
-            {totalPages > 1 ? (
+            {status === 'ok' && totalPages > 1 ? (
               <Group justify="center" mt="lg">
                 <Pagination
                   total={totalPages}
@@ -252,7 +397,7 @@ export function CustomersPage() {
                 />
               </Group>
             ) : null}
-          </>
+          </Box>
         ) : null}
       </Paper>
     </Container>

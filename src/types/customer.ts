@@ -19,8 +19,6 @@ export type CustomerDebt = {
   id: number
   companyName: string
   companyType: CompanyType
-  phone: string
-  email: string
   monthlyFee: number
   billingStartedAt: string
   comments: string

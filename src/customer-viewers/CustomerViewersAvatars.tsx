@@ -30,18 +30,23 @@ function getAvatarColor(userID: string) {
 
 export function CustomerViewersAvatars({
   justify = 'flex-start',
+  maxVisible,
   viewers,
 }: {
   justify?: 'center' | 'flex-start'
+  maxVisible?: number
   viewers: CustomerViewer[]
 }) {
-  if (viewers.length === 0) {
+  const visibleViewers =
+    maxVisible === undefined ? viewers : viewers.slice(0, maxVisible)
+
+  if (visibleViewers.length === 0) {
     return null
   }
 
   return (
     <Group gap={4} justify={justify} wrap="nowrap">
-      {viewers.map((viewer) => (
+      {visibleViewers.map((viewer) => (
         <Tooltip
           key={viewer.userID}
           label={`${viewer.informantName} está viendo esta página`}
