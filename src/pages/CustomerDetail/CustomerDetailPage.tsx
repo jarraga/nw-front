@@ -47,6 +47,7 @@ import type {
   CustomerDetailResponse,
   CustomerPayment,
 } from '../../types/customer'
+import { getErrorMessage } from '../../utils/error-message'
 
 const CUSTOMERS_URL = 'http://localhost:8080/customers'
 const currentDate = new Date()
@@ -263,9 +264,7 @@ function AddActionModal({
       setComments('')
       onClose()
     } catch (error) {
-      setErrorMessage(
-        error instanceof Error ? error.message : 'Ocurrio un error inesperado.',
-      )
+      setErrorMessage(getErrorMessage(error))
     } finally {
       setIsSaving(false)
     }
@@ -371,9 +370,7 @@ function EditCommentsModal({
       await onSaved()
       onClose()
     } catch (error) {
-      setErrorMessage(
-        error instanceof Error ? error.message : 'Ocurrio un error inesperado.',
-      )
+      setErrorMessage(getErrorMessage(error))
     } finally {
       setIsSaving(false)
     }
@@ -465,9 +462,7 @@ function EditActionCommentsModal({
       await onSaved()
       onClose()
     } catch (error) {
-      setErrorMessage(
-        error instanceof Error ? error.message : 'Ocurrio un error inesperado.',
-      )
+      setErrorMessage(getErrorMessage(error))
     } finally {
       setIsSaving(false)
     }
@@ -551,9 +546,7 @@ function DeleteActionModal({
       await onDeleted()
       onClose()
     } catch (error) {
-      setErrorMessage(
-        error instanceof Error ? error.message : 'Ocurrio un error inesperado.',
-      )
+      setErrorMessage(getErrorMessage(error))
     } finally {
       setIsDeleting(false)
     }
@@ -858,11 +851,7 @@ export function CustomerDetailPage() {
           return
         }
 
-        setErrorMessage(
-          error instanceof Error
-            ? error.message
-            : 'Ocurrio un error inesperado.',
-        )
+        setErrorMessage(getErrorMessage(error))
         setStatus('error')
       }
     }

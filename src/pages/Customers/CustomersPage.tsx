@@ -25,6 +25,7 @@ import type {
   CustomerDebtListResponse,
   CustomerDebtSortBy,
 } from '../../types/customer'
+import { getErrorMessage } from '../../utils/error-message'
 
 const CUSTOMERS_DEBT_LIST_URL = 'http://localhost:8080/customers/debt-list'
 const PAGE_SIZE = 50
@@ -149,11 +150,7 @@ export function CustomersPage() {
           return
         }
 
-        setErrorMessage(
-          error instanceof Error
-            ? error.message
-            : 'Ocurrio un error inesperado.',
-        )
+        setErrorMessage(getErrorMessage(error))
         setStatus('error')
       }
     }
