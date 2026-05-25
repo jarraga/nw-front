@@ -4,21 +4,25 @@ import {
   Anchor,
   Alert,
   Box,
+  Button,
   Center,
   CloseButton,
   Container,
   Group,
   Loader,
   LoadingOverlay,
+  Modal,
   Pagination,
   Paper,
   Radio,
   ScrollArea,
   Select,
+  Stack,
   Switch,
   Table,
   Text,
   TextInput,
+  Textarea,
   Title,
 } from '@mantine/core'
 
@@ -35,6 +39,7 @@ import type {
 import { getErrorMessage } from '../../utils/error-message'
 
 const CUSTOMERS_DEBT_LIST_URL = 'http://localhost:8080/customers/debt-list'
+const CUSTOMERS_URL = 'http://localhost:8080/customers'
 const PAGE_SIZE = 50
 const ALL_COMPANY_TYPES = 'all'
 
@@ -55,6 +60,28 @@ const dateFormatter = new Intl.DateTimeFormat('es-AR', {
   month: '2-digit',
   year: 'numeric',
 })
+
+type CreateCustomerForm = {
+  companyName: string
+  companyType: CompanyType
+  phone: string
+  email: string
+  monthlyFee: string
+  billingStartedAt: string
+  comments: string
+}
+
+function createEmptyCustomerForm(): CreateCustomerForm {
+  return {
+    companyName: '',
+    companyType: 'enterprise',
+    phone: '',
+    email: '',
+    monthlyFee: '',
+    billingStartedAt: '',
+    comments: '',
+  }
+}
 
 function formatDate(value: string) {
   return dateFormatter.format(new Date(value))
@@ -150,6 +177,111 @@ function CustomersTable({ customers }: { customers: CustomerDebt[] }) {
   )
 }
 
+function CreateCustomerModal({
+  errorMessage,
+  form,
+  isSaving,
+  onChange,
+  onClose,
+  onSave,
+  opened,
+}: {
+  errorMessage: string
+  form: CreateCustomerForm
+  isSaving: boolean
+  onChange: (field: keyof CreateCustomerForm, value: string) => void
+  onClose: () => void
+  onSave: () => void
+  opened: boolean
+}) {
+  const canSave =
+    form.companyName.trim() !== '' &&
+    form.monthlyFee.trim() !== '' &&
+    form.billingStartedAt.trim() !== ''
+
+  return (
+    <Modal opened={opened} onClose={onClose} title="Crear cliente" centered>
+      <Stack gap="md">
+        <TextInput
+          label="Empresa"
+          value={form.companyName}
+          onChange={(event) =>
+            onChange('companyName', event.currentTarget.value)
+          }
+          required
+        />
+
+        <Select
+          label="Tipo de empresa"
+          value={form.companyType}
+          onChange={(value) =>
+            onChange('companyType', (value ?? 'enterprise') as CompanyType)
+          }
+          data={[
+            { value: 'enterprise', label: companyTypeLabels.enterprise },
+            { value: 'pyme', label: companyTypeLabels.pyme },
+            { value: 'startup', label: companyTypeLabels.startup },
+          ]}
+          allowDeselect={false}
+          required
+        />
+
+        <TextInput
+          label="Telefono"
+          value={form.phone}
+          onChange={(event) => onChange('phone', event.currentTarget.value)}
+        />
+
+        <TextInput
+          label="Email"
+          type="email"
+          value={form.email}
+          onChange={(event) => onChange('email', event.currentTarget.value)}
+        />
+
+        <TextInput
+          label="Abono mensual"
+          type="number"
+          min={0}
+          value={form.monthlyFee}
+          onChange={(event) =>
+            onChange('monthlyFee', event.currentTarget.value)
+          }
+          required
+        />
+
+        <TextInput
+          label="Inicio de facturacion"
+          type="date"
+          value={form.billingStartedAt}
+          onChange={(event) =>
+            onChange('billingStartedAt', event.currentTarget.value)
+          }
+          required
+        />
+
+        <Textarea
+          label="Comentarios"
+          rows={4}
+          value={form.comments}
+          onChange={(event) => onChange('comments', event.currentTarget.value)}
+        />
+
+        {errorMessage ? <Alert color="red">{errorMessage}</Alert> : null}
+
+        <Group justify="flex-end">
+          <Button variant="default" onClick={onClose} disabled={isSaving}>
+            Cancelar
+          </Button>
+          <Button onClick={onSave} loading={isSaving} disabled={!canSave}>
+            Crear
+          </Button>
+        </Group>
+      </Stack>
+    </Modal>
+  )
+}
+
 export function CustomersPage() {
   const companyNameInputRef = useRef<HTMLInputElement>(null)
   const companyNameDebounceRef = useRef<number | null>(null)
@@ -157,6 +289,7 @@ export function CustomersPage() {
   const [hasLoadedCustomers, setHasLoadedCustomers] = useState(false)
   const [customers, setCustomers] = useState<CustomerDebt[]>([])
   const [total, setTotal] = useState(0)
+  const [refreshKey, setRefreshKey] = useState(0)
   const [activePage, setActivePage] = useState(1)
   const [sortBy, setSortBy] = useState<CustomerDebtSortBy>('amount')
   const [companyName, setCompanyName] = useState('')
@@ -166,6 +299,10 @@ export function CustomersPage() {
   >(ALL_COMPANY_TYPES)
   const [reviewed, setReviewed] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
+  const [createForm, setCreateForm] = useState(createEmptyCustomerForm)
+  const [isCreating, setIsCreating] = useState(false)
+  const [createErrorMessage, setCreateErrorMessage] = useState('')
   const totalPages = Math.ceil(total / PAGE_SIZE)
 
   useEffect(() => {
@@ -229,7 +366,7 @@ export function CustomersPage() {
     void fetchCustomers()
 
     return () => controller.abort()
-  }, [activePage, sortBy, companyType, debouncedCompanyName, reviewed])
+  }, [activePage, sortBy, companyType, debouncedCompanyName, reviewed, refreshKey])
 
   function handleSortChange(value: string) {
     setSortBy(value as CustomerDebtSortBy)
@@ -263,6 +400,87 @@ export function CustomersPage() {
     setActivePage(1)
   }
 
+  function handleCreateFormChange(
+    field: keyof CreateCustomerForm,
+    value: string,
+  ) {
+    setCreateForm((currentForm) => ({
+      ...currentForm,
+      [field]: value,
+    }))
+  }
+
+  function handleCloseCreateModal() {
+    if (isCreating) {
+      return
+    }
+
+    setIsCreateModalOpen(false)
+    setCreateErrorMessage('')
+  }
+
+  async function handleCreateCustomer() {
+    const monthlyFee = Number(createForm.monthlyFee)
+
+    if (!Number.isFinite(monthlyFee)) {
+      setCreateErrorMessage('El abono mensual no es valido.')
+      return
+    }
+
+    try {
+      setIsCreating(true)
+      setCreateErrorMessage('')
+
+      const body: {
+        companyName: string
+        companyType: CompanyType
+        phone?: string
+        email?: string
+        monthlyFee: number
+        billingStartedAt: string
+        comments?: string
+      } = {
+        companyName: createForm.companyName.trim(),
+        companyType: createForm.companyType,
+        monthlyFee,
+        billingStartedAt: createForm.billingStartedAt,
+      }
+
+      if (createForm.phone.trim()) {
+        body.phone = createForm.phone.trim()
+      }
+
+      if (createForm.email.trim()) {
+        body.email = createForm.email.trim()
+      }
+
+      if (createForm.comments.trim()) {
+        body.comments = createForm.comments.trim()
+      }
+
+      const response = await fetch(CUSTOMERS_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(body),
+      })
+
+      if (!response.ok) {
+        throw new Error('No se pudo crear el cliente.')
+      }
+
+      setCreateForm(createEmptyCustomerForm())
+      setIsCreateModalOpen(false)
+      setActivePage(1)
+      setRefreshKey((currentKey) => currentKey + 1)
+    } catch (error) {
+      setCreateErrorMessage(getErrorMessage(error))
+    } finally {
+      setIsCreating(false)
+    }
+  }
+
   return (
     <Container size="lg" py="xl">
       <Paper withBorder radius="md" p="xl" className="bg-white">
@@ -274,9 +492,12 @@ export function CustomersPage() {
             </Text>
           </div>
 
-          {status === 'ok' ? (
-            <Text fw={600}>{numberFormatter.format(total)} clientes</Text>
-          ) : null}
+          <Group gap="md">
+            {status === 'ok' ? (
+              <Text fw={600}>{numberFormatter.format(total)} clientes</Text>
+            ) : null}
+            <Button onClick={() => setIsCreateModalOpen(true)}>Crear</Button>
+          </Group>
         </Group>
 
         {status === 'loading' && !hasLoadedCustomers ? (
@@ -399,6 +620,16 @@ export function CustomersPage() {
             ) : null}
           </Box>
         ) : null}
+
+        <CreateCustomerModal
+          errorMessage={createErrorMessage}
+          form={createForm}
+          isSaving={isCreating}
+          onChange={handleCreateFormChange}
+          onClose={handleCloseCreateModal}
+          onSave={handleCreateCustomer}
+          opened={isCreateModalOpen}
+        />
       </Paper>
     </Container>
   )

@@ -54,7 +54,6 @@ import { getErrorMessage } from '../../utils/error-message'
 const CUSTOMERS_URL = 'http://localhost:8080/customers'
 const currentDate = new Date()
 const currentYear = currentDate.getFullYear()
-const currentMonth = currentDate.getMonth() + 1
 
 type ContactModalData = {
   label: string
@@ -710,30 +709,105 @@ function groupPaymentsByYear(payments: CustomerPayment[]) {
   }, {})
 }
 
-function buildPaymentRows(year: number, payments: CustomerPayment[]) {
-  if (year !== currentYear) {
-    return [...payments]
-      .sort((a, b) => a.month - b.month)
-      .map((payment) => ({
-        month: payment.month,
-        payment,
-      }))
+function parseDateParts(value: string) {
+  const [year, month, day] = value.split('-').map(Number)
+
+  return { day, month, year }
+}
+
+function getMonthDays(year: number, month: number) {
+  return new Date(year, month, 0).getDate()
+}
+
+function buildDate(year: number, month: number, day: number) {
+  return new Date(year, month - 1, Math.min(day, getMonthDays(year, month)))
+}
+
+function getNextMonth(year: number, month: number) {
+  if (month === 12) {
+    return { month: 1, year: year + 1 }
   }
 
-  return Array.from({ length: currentMonth }, (_, index) => {
-    const month = index + 1
-    return {
-      month,
-      payment: payments.find((payment) => payment.month === month),
-    }
+  return { month: month + 1, year }
+}
+
+function getFirstDueDate(billingStartedAt: string, dueDay: number) {
+  const billingStart = parseDateParts(billingStartedAt)
+
+  if (billingStart.day <= dueDay) {
+    return buildDate(billingStart.year, billingStart.month, dueDay)
+  }
+
+  const nextMonth = getNextMonth(billingStart.year, billingStart.month)
+
+  return buildDate(nextMonth.year, nextMonth.month, dueDay)
+}
+
+function getDueMonthsForYear(
+  year: number,
+  billingStartedAt: string,
+  dueDay: number,
+) {
+  const firstDueDate = getFirstDueDate(billingStartedAt, dueDay)
+
+  return Array.from({ length: 12 }, (_, index) => index + 1).filter((month) => {
+    const dueDate = buildDate(year, month, dueDay)
+
+    return dueDate >= firstDueDate && dueDate <= currentDate
   })
 }
 
-function PaymentsSection({ payments }: { payments: CustomerPayment[] }) {
+function getPaymentYears(
+  paymentsByYear: Record<number, CustomerPayment[]>,
+  billingStartedAt: string,
+  dueDay: number,
+) {
+  const firstDueDate = getFirstDueDate(billingStartedAt, dueDay)
+  const paymentYears = Object.keys(paymentsByYear).map(Number)
+  const dueYears =
+    firstDueDate <= currentDate
+      ? Array.from(
+          { length: currentYear - firstDueDate.getFullYear() + 1 },
+          (_, index) => firstDueDate.getFullYear() + index,
+        )
+      : []
+
+  return Array.from(new Set([...paymentYears, ...dueYears])).sort(
+    (a, b) => a - b,
+  )
+}
+
+function buildPaymentRows(
+  year: number,
+  payments: CustomerPayment[],
+  billingStartedAt: string,
+  dueDay: number,
+) {
+  const dueMonths = getDueMonthsForYear(year, billingStartedAt, dueDay)
+  const paymentMonths = payments.map((payment) => payment.month)
+
+  return Array.from(new Set([...dueMonths, ...paymentMonths]))
+    .sort((a, b) => a - b)
+    .map((month) => ({
+      month,
+      payment: payments.find((payment) => payment.month === month),
+    }))
+}
+
+function PaymentsSection({
+  billingStartedAt,
+  dueDay,
+  payments,
+}: {
+  billingStartedAt: string
+  dueDay: number
+  payments: CustomerPayment[]
+}) {
   const paymentsByYear = useMemo(() => groupPaymentsByYear(payments), [payments])
-  const years = Array.from(
-    new Set([...Object.keys(paymentsByYear).map(Number), currentYear]),
-  ).sort((a, b) => a - b)
+  const years = useMemo(
+    () => getPaymentYears(paymentsByYear, billingStartedAt, dueDay),
+    [billingStartedAt, dueDay, paymentsByYear],
+  )
   const defaultYear = years.at(-1)?.toString()
 
   return (
@@ -757,41 +831,52 @@ function PaymentsSection({ payments }: { payments: CustomerPayment[] }) {
             ))}
           </Tabs.List>
 
-          {years.map((year) => (
-            <Tabs.Panel key={year} value={year.toString()} pt="md">
-              <Table
-                striped
-                withTableBorder
-                withColumnBorders
-                className="table-fixed"
-              >
-                <Table.Thead>
-                  <Table.Tr>
-                    <Table.Th className="w-1/2">Mes</Table.Th>
-                    <Table.Th className="w-1/2">Fecha de pago</Table.Th>
-                  </Table.Tr>
-                </Table.Thead>
-                <Table.Tbody>
-                  {buildPaymentRows(year, paymentsByYear[year] ?? []).map(
-                    ({ month, payment }) => (
-                      <Table.Tr key={payment?.id ?? `${year}-${month}`}>
-                        <Table.Td>{monthLabels[month - 1]}</Table.Td>
-                        <Table.Td>
-                          {payment?.paidAt ? (
-                            formatDate(payment.paidAt)
-                          ) : (
-                            <Button size="xs" variant="light">
-                              Registrar pago
-                            </Button>
-                          )}
-                        </Table.Td>
+          {years.map((year) => {
+            const paymentRows = buildPaymentRows(
+              year,
+              paymentsByYear[year] ?? [],
+              billingStartedAt,
+              dueDay,
+            )
+
+            return (
+              <Tabs.Panel key={year} value={year.toString()} pt="md">
+                {paymentRows.length === 0 ? (
+                  <Text c="dimmed">Sin pagos registrados.</Text>
+                ) : (
+                  <Table
+                    striped
+                    withTableBorder
+                    withColumnBorders
+                    className="table-fixed"
+                  >
+                    <Table.Thead>
+                      <Table.Tr>
+                        <Table.Th className="w-1/2">Mes</Table.Th>
+                        <Table.Th className="w-1/2">Fecha de pago</Table.Th>
                       </Table.Tr>
-                    ),
-                  )}
-                </Table.Tbody>
-              </Table>
-            </Tabs.Panel>
-          ))}
+                    </Table.Thead>
+                    <Table.Tbody>
+                      {paymentRows.map(({ month, payment }) => (
+                        <Table.Tr key={payment?.id ?? `${year}-${month}`}>
+                          <Table.Td>{monthLabels[month - 1]}</Table.Td>
+                          <Table.Td>
+                            {payment?.paidAt ? (
+                              formatDate(payment.paidAt)
+                            ) : (
+                              <Button size="xs" variant="light">
+                                Registrar pago
+                              </Button>
+                            )}
+                          </Table.Td>
+                        </Table.Tr>
+                      ))}
+                    </Table.Tbody>
+                  </Table>
+                )}
+              </Tabs.Panel>
+            )
+          })}
         </Tabs>
       )}
     </Stack>
@@ -1008,7 +1093,11 @@ export function CustomerDetailPage() {
 
               <Divider />
 
-              <PaymentsSection payments={data.payments} />
+              <PaymentsSection
+                billingStartedAt={data.customer.billingStartedAt}
+                dueDay={data.debt.dueDay}
+                payments={data.payments}
+              />
             </Stack>
           </Paper>
         ) : null}
