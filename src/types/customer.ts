@@ -13,6 +13,14 @@ export type Customer = {
   billingStartedAt: string
   comments: string
   createdAt: string
+  review?: CustomerReview
+}
+
+export type CustomerReview = {
+  reviewedAt: string | null
+  reviewedUntil: string | null
+  reviewedBy: string | null
+  isReviewed: boolean
 }
 
 export type CustomerDebt = {
@@ -24,6 +32,7 @@ export type CustomerDebt = {
   comments: string
   overdueMonths: number
   overdueAmount: number
+  review: CustomerReview
 }
 
 export type CustomerDebtListResponse = {
@@ -55,11 +64,13 @@ export type CustomerDebtSummary = {
   dueDay: number
   overdueMonths: number
   overdueAmount: number
+  review?: CustomerReview
 }
 
 export type CustomerDetailResponse = {
   customer: Customer
   debt: CustomerDebtSummary
+  review?: CustomerReview
   actions: CustomerAction[]
   payments: CustomerPayment[]
 }

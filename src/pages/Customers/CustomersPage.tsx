@@ -23,8 +23,11 @@ import {
   Text,
   TextInput,
   Textarea,
+  ThemeIcon,
   Title,
+  Tooltip,
 } from '@mantine/core'
+import { IconEyeCheck } from '@tabler/icons-react'
 
 import { CustomerViewersAvatars } from '../../customer-viewers/CustomerViewersAvatars'
 import { useCustomerViewers } from '../../customer-viewers/CustomerViewers'
@@ -42,6 +45,7 @@ const CUSTOMERS_DEBT_LIST_URL = 'http://localhost:8080/customers/debt-list'
 const CUSTOMERS_URL = 'http://localhost:8080/customers'
 const PAGE_SIZE = 50
 const ALL_COMPANY_TYPES = 'all'
+const INCLUDE_REVIEWED_STORAGE_KEY = 'includeReviewed'
 
 const companyTypeLabels: Record<CompanyType, string> = {
   enterprise: 'Empresa',
@@ -59,6 +63,13 @@ const dateFormatter = new Intl.DateTimeFormat('es-AR', {
   day: '2-digit',
   month: '2-digit',
   year: 'numeric',
+})
+const dateTimeFormatter = new Intl.DateTimeFormat('es-AR', {
+  day: '2-digit',
+  month: '2-digit',
+  year: 'numeric',
+  hour: '2-digit',
+  minute: '2-digit',
 })
 
 type CreateCustomerForm = {
@@ -83,8 +94,47 @@ function createEmptyCustomerForm(): CreateCustomerForm {
   }
 }
 
+function readStoredIncludeReviewed() {
+  const storedIncludeReviewed = localStorage.getItem(INCLUDE_REVIEWED_STORAGE_KEY)
+
+  if (storedIncludeReviewed === null) {
+    return true
+  }
+
+  return storedIncludeReviewed === 'true'
+}
+
 function formatDate(value: string) {
   return dateFormatter.format(new Date(value))
+}
+
+function formatNullableDateTime(value: string | null) {
+  return value ? dateTimeFormatter.format(new Date(value)) : '-'
+}
+
+function ReviewIndicator({ review }: { review: CustomerDebt['review'] }) {
+  if (!review.isReviewed) {
+    return null
+  }
+
+  return (
+    <Tooltip
+      withArrow
+      label={
+        <Stack gap={4}>
+          <Text size="sm">Revisado: {formatNullableDateTime(review.reviewedAt)}</Text>
+          <Text size="sm">Por: {review.reviewedBy ?? '-'}</Text>
+          <Text size="sm">
+            No revisar hasta: {formatNullableDateTime(review.reviewedUntil)}
+          </Text>
+        </Stack>
+      }
+    >
+      <ThemeIcon variant="light" color="green" radius="xl" size="sm">
+        <IconEyeCheck size={16} />
+      </ThemeIcon>
+    </Tooltip>
+  )
 }
 
 function buildCustomersUrl(
@@ -92,7 +142,7 @@ function buildCustomersUrl(
   sortBy: CustomerDebtSortBy,
   companyType: CompanyType | typeof ALL_COMPANY_TYPES,
   companyName: string,
-  reviewed: boolean,
+  includeReviewed: boolean,
 ) {
   const offset = (page - 1) * PAGE_SIZE
   const url = new URL(CUSTOMERS_DEBT_LIST_URL)
@@ -110,9 +160,7 @@ function buildCustomersUrl(
     url.searchParams.set('companyName', trimmedCompanyName)
   }
 
-  if (reviewed) {
-    url.searchParams.set('reviewed', 'true')
-  }
+  url.searchParams.set('includeReviewed', includeReviewed.toString())
 
   return url.toString()
 }
@@ -131,6 +179,12 @@ function CustomersTable({ customers }: { customers: CustomerDebt[] }) {
             <Table.Th>Abono mensual</Table.Th>
             <Table.Th>Meses vencidos</Table.Th>
             <Table.Th>Monto vencido</Table.Th>
+            <Table.Th
+              ta="center"
+              style={{ width: 96, minWidth: 96, maxWidth: 96 }}
+            >
+              Revisado
+            </Table.Th>
             <Table.Th
               ta="center"
               style={{ width: 104, minWidth: 104, maxWidth: 104 }}
@@ -158,6 +212,14 @@ function CustomersTable({ customers }: { customers: CustomerDebt[] }) {
                 <Table.Td>{currencyFormatter.format(customer.monthlyFee)}</Table.Td>
                 <Table.Td>{numberFormatter.format(customer.overdueMonths)}</Table.Td>
                 <Table.Td>{currencyFormatter.format(customer.overdueAmount)}</Table.Td>
+                <Table.Td
+                  ta="center"
+                  style={{ width: 96, minWidth: 96, maxWidth: 96 }}
+                >
+                  <Group justify="center">
+                    <ReviewIndicator review={customer.review} />
+                  </Group>
+                </Table.Td>
                 <Table.Td
                   ta="center"
                   style={{ width: 104, minWidth: 104, maxWidth: 104 }}
@@ -297,7 +359,9 @@ export function CustomersPage() {
   const [companyType, setCompanyType] = useState<
     CompanyType | typeof ALL_COMPANY_TYPES
   >(ALL_COMPANY_TYPES)
-  const [reviewed, setReviewed] = useState(false)
+  const [includeReviewed, setIncludeReviewed] = useState(
+    readStoredIncludeReviewed,
+  )
   const [errorMessage, setErrorMessage] = useState('')
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
   const [createForm, setCreateForm] = useState(createEmptyCustomerForm)
@@ -337,7 +401,7 @@ export function CustomersPage() {
             sortBy,
             companyType,
             debouncedCompanyName,
-            reviewed,
+            includeReviewed,
           ),
           {
             signal: controller.signal,
@@ -366,7 +430,14 @@ export function CustomersPage() {
     void fetchCustomers()
 
     return () => controller.abort()
-  }, [activePage, sortBy, companyType, debouncedCompanyName, reviewed, refreshKey])
+  }, [
+    activePage,
+    sortBy,
+    companyType,
+    debouncedCompanyName,
+    includeReviewed,
+    refreshKey,
+  ])
 
   function handleSortChange(value: string) {
     setSortBy(value as CustomerDebtSortBy)
@@ -395,8 +466,9 @@ export function CustomersPage() {
     companyNameInputRef.current?.focus()
   }
 
-  function handleReviewedChange(value: boolean) {
-    setReviewed(value)
+  function handleIncludeReviewedChange(value: boolean) {
+    localStorage.setItem(INCLUDE_REVIEWED_STORAGE_KEY, value.toString())
+    setIncludeReviewed(value)
     setActivePage(1)
   }
 
@@ -602,9 +674,9 @@ export function CustomersPage() {
                 </Text>
                 <Switch
                   label="Mostrar"
-                  checked={reviewed}
+                  checked={includeReviewed}
                   onChange={(event) =>
-                    handleReviewedChange(event.currentTarget.checked)
+                    handleIncludeReviewedChange(event.currentTarget.checked)
                   }
                 />
               </Box>
