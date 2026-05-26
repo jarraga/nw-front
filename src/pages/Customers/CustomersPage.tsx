@@ -32,6 +32,7 @@ import { IconEyeCheck } from '@tabler/icons-react'
 import { CustomerViewersAvatars } from '../../customer-viewers/CustomerViewersAvatars'
 import { useCustomerViewers } from '../../customer-viewers/CustomerViewers'
 import { routePaths } from '../../routes/paths'
+import { useInformantSession } from '../../session/InformantSession'
 import type { AsyncStatus } from '../../types/async-status'
 import type {
   CompanyType,
@@ -143,6 +144,7 @@ function buildCustomersUrl(
   companyType: CompanyType | typeof ALL_COMPANY_TYPES,
   companyName: string,
   includeReviewed: boolean,
+  dueDay: number | null,
 ) {
   const offset = (page - 1) * PAGE_SIZE
   const url = new URL(CUSTOMERS_DEBT_LIST_URL)
@@ -161,6 +163,10 @@ function buildCustomersUrl(
   }
 
   url.searchParams.set('includeReviewed', includeReviewed.toString())
+
+  if (dueDay !== null) {
+    url.searchParams.set('dueDay', dueDay.toString())
+  }
 
   return url.toString()
 }
@@ -345,6 +351,7 @@ function CreateCustomerModal({
 }
 
 export function CustomersPage() {
+  const { dueDay } = useInformantSession()
   const companyNameInputRef = useRef<HTMLInputElement>(null)
   const companyNameDebounceRef = useRef<number | null>(null)
   const [status, setStatus] = useState<AsyncStatus>('loading')
@@ -402,6 +409,7 @@ export function CustomersPage() {
             companyType,
             debouncedCompanyName,
             includeReviewed,
+            dueDay,
           ),
           {
             signal: controller.signal,
@@ -435,6 +443,7 @@ export function CustomersPage() {
     sortBy,
     companyType,
     debouncedCompanyName,
+    dueDay,
     includeReviewed,
     refreshKey,
   ])
