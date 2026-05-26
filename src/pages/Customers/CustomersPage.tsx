@@ -3,6 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom'
 import {
   Anchor,
   Alert,
+  Badge,
   Box,
   Button,
   Center,
@@ -49,6 +50,8 @@ import {
 
 const CUSTOMERS_DEBT_LIST_URL = 'http://localhost:8080/customers/debt-list'
 const CUSTOMERS_URL = 'http://localhost:8080/customers'
+const REVIEWED_DEBTORS_PERCENTAGE_URL =
+  'http://localhost:8080/customers/reviewed-debtors-percentage'
 const PAGE_SIZE = 50
 const ALL_COMPANY_TYPES = 'all'
 const INCLUDE_REVIEWED_STORAGE_KEY = 'includeReviewed'
@@ -69,6 +72,10 @@ const dateFormatter = new Intl.DateTimeFormat('es-AR', {
   day: '2-digit',
   month: '2-digit',
   year: 'numeric',
+})
+const percentFormatter = new Intl.NumberFormat('es-AR', {
+  maximumFractionDigits: 1,
+  minimumFractionDigits: 0,
 })
 const dateTimeFormatter = new Intl.DateTimeFormat('es-AR', {
   day: '2-digit',
@@ -108,6 +115,29 @@ function readStoredIncludeReviewed() {
   }
 
   return storedIncludeReviewed === 'true'
+}
+
+function normalizePercentage(value: number) {
+  return value <= 1 ? value * 100 : value
+}
+
+function getReviewedDebtorsPercentage(data: unknown) {
+  if (typeof data === 'number') {
+    return normalizePercentage(data)
+  }
+
+  if (!data || typeof data !== 'object') {
+    return null
+  }
+
+  const record = data as Record<string, unknown>
+  const rawValue =
+    record.percentage ??
+    record.reviewedDebtorsPercentage ??
+    record.reviewedPercentage ??
+    record.value
+
+  return typeof rawValue === 'number' ? normalizePercentage(rawValue) : null
 }
 
 function readNumberSearchParam(
@@ -460,6 +490,11 @@ export function CustomersPage() {
   const [createForm, setCreateForm] = useState(createEmptyCustomerForm)
   const [isCreating, setIsCreating] = useState(false)
   const [createErrorMessage, setCreateErrorMessage] = useState('')
+  const [reviewedDebtorsPercentage, setReviewedDebtorsPercentage] = useState<
+    number | null
+  >(null)
+  const [reviewedDebtorsPercentageStatus, setReviewedDebtorsPercentageStatus] =
+    useState<AsyncStatus>('loading')
   const totalPages = Math.ceil(total / PAGE_SIZE)
   const currentSearch = `?${searchParams.toString()}`
   const filterSeparatorStyle = isCompactFilters
@@ -518,6 +553,39 @@ export function CustomersPage() {
       }
     }
   }, [companyName])
+
+  useEffect(() => {
+    const controller = new AbortController()
+
+    async function fetchReviewedDebtorsPercentage() {
+      try {
+        setReviewedDebtorsPercentageStatus('loading')
+
+        const response = await fetch(REVIEWED_DEBTORS_PERCENTAGE_URL, {
+          signal: controller.signal,
+        })
+
+        if (!response.ok) {
+          throw new Error('No se pudo obtener el porcentaje de revisados.')
+        }
+
+        const data = await response.json()
+        setReviewedDebtorsPercentage(getReviewedDebtorsPercentage(data))
+        setReviewedDebtorsPercentageStatus('ok')
+      } catch (error) {
+        if (error instanceof DOMException && error.name === 'AbortError') {
+          return
+        }
+
+        setReviewedDebtorsPercentage(null)
+        setReviewedDebtorsPercentageStatus('error')
+      }
+    }
+
+    void fetchReviewedDebtorsPercentage()
+
+    return () => controller.abort()
+  }, [])
 
   useEffect(() => {
     const controller = new AbortController()
@@ -708,7 +776,29 @@ export function CustomersPage() {
       <Paper withBorder radius="md" p="xl" className="bg-white">
         <Group justify="space-between" align="flex-start" mb="lg">
           <div>
-            <Title order={1}>Clientes</Title>
+            <Group align="baseline" gap="md">
+              <Title order={1}>Clientes</Title>
+              {reviewedDebtorsPercentageStatus === 'loading' ? (
+                <Text c="dimmed" size="sm">
+                  Calculando revisados...
+                </Text>
+              ) : null}
+              {reviewedDebtorsPercentageStatus === 'ok' &&
+              reviewedDebtorsPercentage !== null ? (
+                <Badge
+                  color="blue"
+                  h="auto"
+                  py={4}
+                  styles={{ label: { textTransform: 'none' } }}
+                  variant="light"
+                >
+                  <Text component="span" fw={700} size="md">
+                    {percentFormatter.format(reviewedDebtorsPercentage)}%
+                  </Text>{' '}
+                  de deudores revisados
+                </Badge>
+              ) : null}
+            </Group>
             <Text mt="xs" c="dimmed">
               Deudas registradas por cliente.
             </Text>

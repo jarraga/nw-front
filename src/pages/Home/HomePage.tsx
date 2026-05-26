@@ -373,6 +373,16 @@ export function HomePage() {
   )
   const percentageYAxisDomain = getPercentageYAxisDomain(visibleChartData)
 
+  function handleYearChange(value: string | number) {
+    const nextYear = Number(value)
+
+    if (!Number.isFinite(nextYear)) {
+      return
+    }
+
+    setYear(Math.min(nextYear, currentYear))
+  }
+
   return (
     <Container size="lg" py="xl">
       <Stack gap="lg">
@@ -386,7 +396,7 @@ export function HomePage() {
         </Group>
 
         <SimpleGrid cols={{ base: 1, md: 2 }} spacing="lg">
-          <Paper withBorder radius="md" p="xl" className="bg-white">
+          <Paper withBorder radius="md" p="xl" className="bg-white" style={{ order: 2 }}>
             <Stack gap="lg">
               <Group justify="space-between" align="flex-start">
                 <div>
@@ -400,10 +410,10 @@ export function HomePage() {
                   <NumberInput
                     label="Año"
                     min={2000}
-                    max={2100}
+                    max={currentYear}
                     step={1}
                     value={year}
-                    onChange={(value) => setYear(Number(value) || year)}
+                    onChange={handleYearChange}
                   />
                 </SimpleGrid>
               </Group>
@@ -462,7 +472,7 @@ export function HomePage() {
             </Stack>
           </Paper>
 
-          <Paper withBorder radius="md" p="xl" className="bg-white">
+          <Paper withBorder radius="md" p="xl" className="bg-white" style={{ order: 1 }}>
             <Stack gap="lg">
               <div>
                 <Title order={2}>Clientes</Title>
