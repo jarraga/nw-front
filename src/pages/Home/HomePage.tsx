@@ -166,6 +166,13 @@ function formatPercent(value: number) {
   })}%`
 }
 
+function getPercentageYAxisDomain(data: MonthlyDelinquencyChartItem[]) {
+  const maxPercentage = Math.max(...data.map((item) => item.percentage), 0)
+  const roundedMax = Math.ceil(maxPercentage / 10) * 10
+
+  return [0, Math.min(Math.max(roundedMax, 10), 100)]
+}
+
 function formatNumber(value: number) {
   return value.toLocaleString('es-AR')
 }
@@ -361,6 +368,10 @@ export function HomePage() {
   const debtorsByCompanyTypePieData = metrics
     ? buildDebtorsByCompanyTypePieData(metrics.debtors.byCompanyType)
     : []
+  const visibleChartData = chartData.filter(
+    (item) => year !== currentYear || item.month <= currentMonth,
+  )
+  const percentageYAxisDomain = getPercentageYAxisDomain(visibleChartData)
 
   return (
     <Container size="lg" py="xl">
@@ -416,15 +427,13 @@ export function HomePage() {
                   <Box h={320}>
                     <ResponsiveContainer width="100%" height="100%">
                       <LineChart
-                        data={chartData.filter(
-                          (item) => year !== currentYear || item.month <= currentMonth,
-                        )}
+                        data={visibleChartData}
                         margin={{ top: 16, right: 24, bottom: 8, left: 0 }}
                       >
                         <CartesianGrid strokeDasharray="3 3" vertical={false} />
                         <XAxis dataKey="monthLabel" tickLine={false} />
                         <YAxis
-                          domain={[0, 100]}
+                          domain={percentageYAxisDomain}
                           tickFormatter={(value) => `${value}%`}
                           tickLine={false}
                           width={48}
