@@ -3,4 +3,5 @@ export const routePaths = {
   customers: '/customers',
   customerDetailRoute: '/customers/:customerId',
   customerDetail: (customerId: number | string) => `/customers/${customerId}`,
+  demo: '/demo',
 } as const

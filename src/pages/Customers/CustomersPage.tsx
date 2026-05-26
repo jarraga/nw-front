@@ -29,7 +29,7 @@ import {
   Tooltip,
 } from '@mantine/core'
 import { useMediaQuery } from '@mantine/hooks'
-import { IconEyeCheck } from '@tabler/icons-react'
+import { IconEyeCheck, IconUsers } from '@tabler/icons-react'
 
 import { CustomerViewersAvatars } from '../../customer-viewers/CustomerViewersAvatars'
 import { useCustomerViewers } from '../../customer-viewers/CustomerViewers'
@@ -496,6 +496,12 @@ export function CustomersPage() {
     useState<AsyncStatus>('loading')
   const totalPages = Math.ceil(total / PAGE_SIZE)
   const currentSearch = `?${searchParams.toString()}`
+  const hasCustomers = customers.length > 0
+  const hasActiveFilters =
+    companyName.trim() !== '' ||
+    companyType !== ALL_COMPANY_TYPES ||
+    sortBy !== 'amount' ||
+    !includeReviewed
   const filterSeparatorStyle = isCompactFilters
     ? { borderTop: '1px solid var(--mantine-color-gray-3)' }
     : { borderLeft: '1px solid var(--mantine-color-gray-3)' }
@@ -828,7 +834,37 @@ export function CustomersPage() {
           </Alert>
         ) : null}
 
-        {status !== 'error' && hasLoadedCustomers ? (
+        {status === 'ok' && hasLoadedCustomers && !hasCustomers ? (
+          <Center py={64}>
+            <Stack align="center" gap="md" maw={420}>
+              <ThemeIcon color="blue" radius="xl" size={64} variant="light">
+                <IconUsers size={34} />
+              </ThemeIcon>
+              <Stack align="center" gap={4}>
+                <Title order={2} ta="center">
+                  No hay clientes para mostrar
+                </Title>
+                <Text c="dimmed" ta="center">
+                  {hasActiveFilters
+                    ? 'No encontramos clientes con los filtros actuales.'
+                    : 'Todavía no hay clientes cargados en el sistema.'}
+                </Text>
+              </Stack>
+              <Group justify="center">
+                {hasActiveFilters ? (
+                  <Button variant="default" onClick={handleResetFilters}>
+                    Limpiar filtros
+                  </Button>
+                ) : null}
+                <Button onClick={() => setIsCreateModalOpen(true)}>
+                  Crear cliente
+                </Button>
+              </Group>
+            </Stack>
+          </Center>
+        ) : null}
+
+        {status !== 'error' && hasLoadedCustomers && hasCustomers ? (
           <Box pos="relative">
             <LoadingOverlay
               visible={status === 'loading'}
@@ -960,13 +996,11 @@ export function CustomersPage() {
               </Box>
             </Box>
 
-            {customers.length > 0 ? (
-              <CustomersTable
-                customers={customers}
-                lastVisitedCustomerID={lastVisitedCustomerID}
-                search={currentSearch}
-              />
-            ) : null}
+            <CustomersTable
+              customers={customers}
+              lastVisitedCustomerID={lastVisitedCustomerID}
+              search={currentSearch}
+            />
 
             {status === 'ok' && totalPages > 1 ? (
               <Group justify="center" mt="lg">

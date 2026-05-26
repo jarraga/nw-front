@@ -111,7 +111,10 @@ function getFirstPaymentDate(payments: CustomerPayment[], dueDay: number) {
   )[0]
 
   if (!firstPayment) {
-    return null
+    const currentMonth = currentDate.getMonth() + 1
+    const currentDueDate = buildDate(currentYear, currentMonth, dueDay)
+
+    return currentDueDate <= currentDate ? currentDueDate : null
   }
 
   return buildDate(firstPayment.year, firstPayment.month, dueDay)
