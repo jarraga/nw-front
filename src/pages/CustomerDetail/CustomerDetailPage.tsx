@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import {
   Alert,
@@ -14,11 +14,8 @@ import {
   Loader,
   Modal,
   Paper,
-  NumberInput,
   SimpleGrid,
   Stack,
-  Tabs,
-  Table,
   Text,
   Textarea,
   TextInput,
@@ -27,10 +24,8 @@ import {
 } from '@mantine/core'
 import { QRCodeSVG } from 'qrcode.react'
 import {
-  IconCalendarDollar,
   IconCash,
   IconDots,
-  IconEyeCheck,
   IconInfoCircle,
   IconMail,
   IconMapPin,
@@ -50,14 +45,17 @@ import type {
   CustomerAction,
   CustomerActionType,
   CustomerDetailResponse,
-  CustomerPayment,
-  CustomerReview,
 } from '../../types/customer'
 import { getErrorMessage } from '../../utils/error-message'
+import {
+  CreateReviewModal,
+  DeleteReviewModal,
+  getCustomerReview,
+  ReviewSection,
+} from './CustomerReviewSection'
+import { PaymentsSection } from './PaymentsSection'
 
 const CUSTOMERS_URL = 'http://localhost:8080/customers'
-const currentDate = new Date()
-const currentYear = currentDate.getFullYear()
 
 type ContactModalData = {
   label: string
@@ -78,17 +76,6 @@ const companyTypeLabels: Record<CompanyType, string> = {
   startup: 'Startup',
 }
 
-const emptyReview: CustomerReview = {
-  reviewedAt: null,
-  reviewedUntil: null,
-  reviewedBy: null,
-  isReviewed: false,
-}
-
-function getCustomerReview(data: CustomerDetailResponse | null) {
-  return data?.review ?? data?.debt.review ?? data?.customer.review ?? emptyReview
-}
-
 const actionTypeLabels: Record<CustomerActionType, string> = {
   call: 'Llamada',
   email: 'Email',
@@ -105,21 +92,6 @@ const actionTypeOptions: ActionTypeOption[] = [
     icon: IconMapPin,
   },
   { value: 'other', label: actionTypeLabels.other, icon: IconDots },
-]
-
-const monthLabels = [
-  'Enero',
-  'Febrero',
-  'Marzo',
-  'Abril',
-  'Mayo',
-  'Junio',
-  'Julio',
-  'Agosto',
-  'Septiembre',
-  'Octubre',
-  'Noviembre',
-  'Diciembre',
 ]
 
 const currencyFormatter = new Intl.NumberFormat('es-AR', {
@@ -147,10 +119,6 @@ function formatDate(value: string | null) {
 
 function formatDateTime(value: string) {
   return dateTimeFormatter.format(new Date(value))
-}
-
-function formatNullableDateTime(value: string | null) {
-  return value ? dateTimeFormatter.format(new Date(value)) : '-'
 }
 
 function getActionIcon(type: CustomerActionType) {
@@ -182,43 +150,6 @@ function DebtInfoItem({ label, value }: { label: string; value: string }) {
         {value}
       </Text>
     </div>
-  )
-}
-
-function ReviewSection({
-  onDelete,
-  review,
-}: {
-  onDelete: () => void
-  review: CustomerReview
-}) {
-  return (
-    <Stack gap="md">
-      <Group justify="space-between" align="center">
-        <Group gap="xs">
-          <ThemeIcon variant="light" radius="md" color="green">
-            <IconEyeCheck size={18} />
-          </ThemeIcon>
-          <Title order={2}>Revisión</Title>
-        </Group>
-
-        <Button color="red" variant="light" onClick={onDelete}>
-          Borrar
-        </Button>
-      </Group>
-
-      <SimpleGrid cols={{ base: 1, sm: 2, md: 3 }}>
-        <InfoItem
-          label="Revisado"
-          value={formatNullableDateTime(review.reviewedAt)}
-        />
-        <InfoItem label="Por" value={review.reviewedBy ?? '-'} />
-        <InfoItem
-          label="No revisar hasta"
-          value={formatNullableDateTime(review.reviewedUntil)}
-        />
-      </SimpleGrid>
-    </Stack>
   )
 }
 
@@ -381,170 +312,6 @@ function EditCustomerModal({
           </Button>
           <Button onClick={handleSave} loading={isSaving}>
             Guardar
-          </Button>
-        </Group>
-      </Stack>
-    </Modal>
-  )
-}
-
-function CreateReviewModal({
-  customerId,
-  informantName,
-  opened,
-  onClose,
-  onSaved,
-}: {
-  customerId: number
-  informantName: string
-  opened: boolean
-  onClose: () => void
-  onSaved: () => Promise<void>
-}) {
-  const [days, setDays] = useState<string | number>(7)
-  const [isSaving, setIsSaving] = useState(false)
-  const [errorMessage, setErrorMessage] = useState('')
-
-  useEffect(() => {
-    if (opened) {
-      setDays(7)
-      setErrorMessage('')
-    }
-  }, [opened])
-
-  async function handleSave() {
-    const parsedDays = Number(days)
-
-    if (!Number.isFinite(parsedDays) || parsedDays <= 0) {
-      setErrorMessage('La cantidad de días no es valida.')
-      return
-    }
-
-    try {
-      setIsSaving(true)
-      setErrorMessage('')
-
-      const response = await fetch(`${CUSTOMERS_URL}/${customerId}/review`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          days: parsedDays,
-          reviewedBy: informantName,
-        }),
-      })
-
-      if (!response.ok) {
-        throw new Error('No se pudo crear la revisión.')
-      }
-
-      await onSaved()
-      onClose()
-    } catch (error) {
-      setErrorMessage(getErrorMessage(error))
-    } finally {
-      setIsSaving(false)
-    }
-  }
-
-  function handleCancel() {
-    setErrorMessage('')
-    onClose()
-  }
-
-  return (
-    <Modal opened={opened} onClose={handleCancel} title="Crear revisión" centered>
-      <Stack gap="md">
-        <NumberInput
-          label="Días"
-          min={1}
-          step={1}
-          value={days}
-          onChange={setDays}
-          required
-        />
-
-        {errorMessage ? <Alert color="red">{errorMessage}</Alert> : null}
-
-        <Group justify="flex-end">
-          <Button variant="default" onClick={handleCancel} disabled={isSaving}>
-            Cancelar
-          </Button>
-          <Button onClick={handleSave} loading={isSaving} disabled={days === ''}>
-            Guardar
-          </Button>
-        </Group>
-      </Stack>
-    </Modal>
-  )
-}
-
-function DeleteReviewModal({
-  customerId,
-  opened,
-  onClose,
-  onDeleted,
-}: {
-  customerId: number
-  opened: boolean
-  onClose: () => void
-  onDeleted: () => Promise<void>
-}) {
-  const [isDeleting, setIsDeleting] = useState(false)
-  const [errorMessage, setErrorMessage] = useState('')
-
-  useEffect(() => {
-    if (opened) {
-      setErrorMessage('')
-    }
-  }, [opened])
-
-  async function handleDelete() {
-    try {
-      setIsDeleting(true)
-      setErrorMessage('')
-
-      const response = await fetch(`${CUSTOMERS_URL}/${customerId}/review`, {
-        method: 'DELETE',
-      })
-
-      if (!response.ok) {
-        throw new Error('No se pudo borrar la revisión.')
-      }
-
-      await onDeleted()
-      onClose()
-    } catch (error) {
-      setErrorMessage(getErrorMessage(error))
-    } finally {
-      setIsDeleting(false)
-    }
-  }
-
-  function handleCancel() {
-    setErrorMessage('')
-    onClose()
-  }
-
-  return (
-    <Modal
-      opened={opened}
-      onClose={handleCancel}
-      title="Borrar revisión"
-      centered
-    >
-      <Stack gap="md">
-        <Text>¿Seguro que queres borrar esta revisión?</Text>
-
-        {errorMessage ? <Alert color="red">{errorMessage}</Alert> : null}
-
-        <Group justify="flex-end">
-          <Button variant="default" onClick={handleCancel} disabled={isDeleting}>
-            Cancelar
-          </Button>
-          <Button color="red" onClick={handleDelete} loading={isDeleting}>
-            Borrar
           </Button>
         </Group>
       </Stack>
@@ -1029,285 +796,6 @@ function ActionsSection({
           ) : null}
         </Stack>
       )}
-    </Stack>
-  )
-}
-
-function groupPaymentsByYear(payments: CustomerPayment[]) {
-  return payments.reduce<Record<number, CustomerPayment[]>>((acc, payment) => {
-    acc[payment.year] = [...(acc[payment.year] ?? []), payment]
-    return acc
-  }, {})
-}
-
-function getMonthDays(year: number, month: number) {
-  return new Date(year, month, 0).getDate()
-}
-
-function buildDate(year: number, month: number, day: number) {
-  return new Date(year, month - 1, Math.min(day, getMonthDays(year, month)))
-}
-
-function getFirstPaymentDate(payments: CustomerPayment[], dueDay: number) {
-  const firstPayment = [...payments].sort(
-    (a, b) => a.year - b.year || a.month - b.month,
-  )[0]
-
-  if (!firstPayment) {
-    return null
-  }
-
-  return buildDate(firstPayment.year, firstPayment.month, dueDay)
-}
-
-function getDueMonthsForYear(year: number, firstPaymentDate: Date, dueDay: number) {
-
-  return Array.from({ length: 12 }, (_, index) => index + 1).filter((month) => {
-    const dueDate = buildDate(year, month, dueDay)
-
-    return dueDate >= firstPaymentDate && dueDate <= currentDate
-  })
-}
-
-function getPaymentYears(payments: CustomerPayment[], dueDay: number) {
-  const firstPaymentDate = getFirstPaymentDate(payments, dueDay)
-  const paymentYears = payments.map((payment) => payment.year)
-  const dueYears =
-    firstPaymentDate !== null && firstPaymentDate <= currentDate
-      ? Array.from(
-          { length: currentYear - firstPaymentDate.getFullYear() + 1 },
-          (_, index) => firstPaymentDate.getFullYear() + index,
-        )
-      : []
-
-  return Array.from(new Set([...paymentYears, ...dueYears])).sort(
-    (a, b) => a - b,
-  )
-}
-
-function buildPaymentRows(
-  year: number,
-  payments: CustomerPayment[],
-  firstPaymentDate: Date | null,
-  dueDay: number,
-) {
-  const dueMonths =
-    firstPaymentDate === null
-      ? []
-      : getDueMonthsForYear(year, firstPaymentDate, dueDay)
-  const paymentMonths = payments.map((payment) => payment.month)
-
-  return Array.from(new Set([...dueMonths, ...paymentMonths]))
-    .sort((a, b) => a - b)
-    .map((month) => ({
-      month,
-      payment: payments.find((payment) => payment.month === month),
-    }))
-}
-
-function PaymentsSection({
-  customerId,
-  dueDay,
-  onPaymentRegistered,
-  payments,
-}: {
-  customerId: number
-  dueDay: number
-  onPaymentRegistered: () => Promise<void>
-  payments: CustomerPayment[]
-}) {
-  const [paymentToRegister, setPaymentToRegister] = useState<{
-    month: number
-    year: number
-  } | null>(null)
-  const [paidAt, setPaidAt] = useState('')
-  const [savingPaymentKey, setSavingPaymentKey] = useState('')
-  const [errorMessage, setErrorMessage] = useState('')
-  const paymentsByYear = useMemo(() => groupPaymentsByYear(payments), [payments])
-  const firstPaymentDate = useMemo(
-    () => getFirstPaymentDate(payments, dueDay),
-    [dueDay, payments],
-  )
-  const years = useMemo(
-    () => getPaymentYears(payments, dueDay),
-    [dueDay, payments],
-  )
-  const defaultYear = years.at(-1)?.toString()
-
-  function handleOpenPaymentModal(year: number, month: number) {
-    setPaymentToRegister({ month, year })
-    setPaidAt(new Date().toISOString().slice(0, 10))
-    setErrorMessage('')
-  }
-
-  function handleClosePaymentModal() {
-    if (savingPaymentKey) {
-      return
-    }
-
-    setPaymentToRegister(null)
-    setPaidAt('')
-    setErrorMessage('')
-  }
-
-  async function handleRegisterPayment() {
-    if (!paymentToRegister || !paidAt) {
-      return
-    }
-
-    const paymentKey = `${paymentToRegister.year}-${paymentToRegister.month}`
-
-    try {
-      setSavingPaymentKey(paymentKey)
-      setErrorMessage('')
-
-      const response = await fetch(`${CUSTOMERS_URL}/${customerId}/payments`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          year: paymentToRegister.year,
-          month: paymentToRegister.month,
-          paidAt: new Date(`${paidAt}T00:00:00`).toISOString(),
-        }),
-      })
-
-      if (!response.ok) {
-        throw new Error('No se pudo registrar el pago.')
-      }
-
-      await onPaymentRegistered()
-      setPaymentToRegister(null)
-      setPaidAt('')
-    } catch (error) {
-      setErrorMessage(getErrorMessage(error))
-    } finally {
-      setSavingPaymentKey('')
-    }
-  }
-
-  return (
-    <Stack gap="md">
-      <Group gap="xs">
-        <ThemeIcon variant="light" radius="md">
-          <IconCalendarDollar size={18} />
-        </ThemeIcon>
-        <Title order={2}>Pagos</Title>
-      </Group>
-
-      {errorMessage ? <Alert color="red">{errorMessage}</Alert> : null}
-
-      {years.length === 0 ? (
-        <Text c="dimmed">Sin pagos registrados.</Text>
-      ) : (
-        <Tabs defaultValue={defaultYear}>
-          <Tabs.List>
-            {years.map((year) => (
-              <Tabs.Tab key={year} value={year.toString()}>
-                {year}
-              </Tabs.Tab>
-            ))}
-          </Tabs.List>
-
-          {years.map((year) => {
-            const paymentRows = buildPaymentRows(
-              year,
-              paymentsByYear[year] ?? [],
-              firstPaymentDate,
-              dueDay,
-            )
-
-            return (
-              <Tabs.Panel key={year} value={year.toString()} pt="md">
-                {paymentRows.length === 0 ? (
-                  <Text c="dimmed">Sin pagos registrados.</Text>
-                ) : (
-                  <Table
-                    striped
-                    withTableBorder
-                    withColumnBorders
-                    className="table-fixed"
-                  >
-                    <Table.Thead>
-                      <Table.Tr>
-                        <Table.Th className="w-1/2">Mes</Table.Th>
-                        <Table.Th className="w-1/2">Fecha de pago</Table.Th>
-                      </Table.Tr>
-                    </Table.Thead>
-                    <Table.Tbody>
-                      {paymentRows.map(({ month, payment }) => (
-                        <Table.Tr key={payment?.id ?? `${year}-${month}`}>
-                          <Table.Td>{monthLabels[month - 1]}</Table.Td>
-                          <Table.Td>
-                            {payment?.paidAt ? (
-                              formatDate(payment.paidAt)
-                            ) : (
-                              <Button
-                                size="xs"
-                                variant="light"
-                                onClick={() => handleOpenPaymentModal(year, month)}
-                              >
-                                Registrar pago
-                              </Button>
-                            )}
-                          </Table.Td>
-                        </Table.Tr>
-                      ))}
-                    </Table.Tbody>
-                  </Table>
-                )}
-              </Tabs.Panel>
-            )
-          })}
-        </Tabs>
-      )}
-
-      <Modal
-        opened={paymentToRegister !== null}
-        onClose={handleClosePaymentModal}
-        title="Registrar pago"
-        centered
-      >
-        <Stack gap="md">
-          <TextInput
-            label="Fecha de pago"
-            type="date"
-            value={paidAt}
-            onChange={(event) => setPaidAt(event.currentTarget.value)}
-            required
-          />
-
-          {paymentToRegister ? (
-            <Text size="sm" c="dimmed">
-              {monthLabels[paymentToRegister.month - 1]} {paymentToRegister.year}
-            </Text>
-          ) : null}
-
-          {errorMessage ? <Alert color="red">{errorMessage}</Alert> : null}
-
-          <Group justify="flex-end">
-            <Button
-              variant="default"
-              onClick={handleClosePaymentModal}
-              disabled={savingPaymentKey !== ''}
-            >
-              Cancelar
-            </Button>
-            <Button
-              onClick={handleRegisterPayment}
-              loading={
-                paymentToRegister !== null &&
-                savingPaymentKey ===
-                  `${paymentToRegister.year}-${paymentToRegister.month}`
-              }
-              disabled={!paidAt}
-            >
-              Guardar
-            </Button>
-          </Group>
-        </Stack>
-      </Modal>
     </Stack>
   )
 }
