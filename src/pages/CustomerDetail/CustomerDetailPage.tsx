@@ -24,6 +24,7 @@ import {
 } from '@mantine/core'
 import { QRCodeSVG } from 'qrcode.react'
 import {
+  IconAlertTriangle,
   IconCash,
   IconDots,
   IconInfoSquareRounded,
@@ -208,6 +209,121 @@ function BehaviorSection({ behavior }: { behavior: CustomerBehavior }) {
         días.
       </Alert>
     </Stack>
+  )
+}
+
+function DeactivateCustomerSection({ onDeactivate }: { onDeactivate: () => void }) {
+  return (
+    <Stack gap="md">
+      <Group gap="xs">
+        <ThemeIcon color="gray" variant="light" radius="md">
+          <IconAlertTriangle size={18} />
+        </ThemeIcon>
+        <Title order={2}>Dar de baja</Title>
+      </Group>
+
+      <Alert color="gray" variant="light" title="Baja del cliente">
+        Podés dar de baja este cliente cuando ya no corresponda seguir
+        gestionándolo.
+      </Alert>
+
+      <Group justify="flex-end">
+        <Button variant="default" onClick={onDeactivate}>
+          Dar de baja
+        </Button>
+      </Group>
+    </Stack>
+  )
+}
+
+function DeactivateCustomerModal({
+  customerId,
+  opened,
+  onClose,
+  onDeactivated,
+}: {
+  customerId: number
+  opened: boolean
+  onClose: () => void
+  onDeactivated: () => void
+}) {
+  const [secondsLeft, setSecondsLeft] = useState(3)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [errorMessage, setErrorMessage] = useState('')
+  const canDeactivate = secondsLeft === 0
+
+  useEffect(() => {
+    if (!opened) {
+      setSecondsLeft(3)
+      setIsSubmitting(false)
+      setErrorMessage('')
+      return
+    }
+
+    if (secondsLeft === 0) {
+      return
+    }
+
+    const timeoutID = window.setTimeout(() => {
+      setSecondsLeft((current) => Math.max(current - 1, 0))
+    }, 1000)
+
+    return () => window.clearTimeout(timeoutID)
+  }, [opened, secondsLeft])
+
+  async function handleDeactivate() {
+    try {
+      setIsSubmitting(true)
+      setErrorMessage('')
+
+      const response = await fetch(`${CUSTOMERS_URL}/${customerId}/deactivated`, {
+        body: JSON.stringify({ deactivated: true }),
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        method: 'PATCH',
+      })
+
+      if (!response.ok) {
+        throw new Error('No se pudo dar de baja el cliente.')
+      }
+
+      onDeactivated()
+    } catch (error) {
+      setErrorMessage(getErrorMessage(error))
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  return (
+    <Modal opened={opened} onClose={onClose} title="Dar de baja cliente" centered>
+      <Stack gap="md">
+        <Alert color="red" variant="light" title="Confirmar baja">
+          Esta acción no es reversible.
+        </Alert>
+
+        {errorMessage ? (
+          <Alert color="red" variant="light">
+            {errorMessage}
+          </Alert>
+        ) : null}
+
+        <Group justify="flex-end">
+          <Button variant="default" onClick={onClose} disabled={isSubmitting}>
+            Cancelar
+          </Button>
+          <Button
+            color="red"
+            disabled={!canDeactivate}
+            loading={isSubmitting}
+            onClick={handleDeactivate}
+          >
+            {canDeactivate ? 'Dar de baja' : `Dar de baja (${secondsLeft})`}
+          </Button>
+        </Group>
+      </Stack>
+    </Modal>
   )
 }
 
@@ -881,6 +997,7 @@ export function CustomerDetailPage() {
   const [isDeleteReviewModalOpen, setIsDeleteReviewModalOpen] = useState(false)
   const [isActionModalOpen, setIsActionModalOpen] = useState(false)
   const [isCommentsModalOpen, setIsCommentsModalOpen] = useState(false)
+  const [isDeactivateModalOpen, setIsDeactivateModalOpen] = useState(false)
   const [editingAction, setEditingAction] = useState<CustomerAction | null>(
     null,
   )
@@ -1139,6 +1256,12 @@ export function CustomerDetailPage() {
                 onPaymentRegistered={refreshCustomerDetail}
                 payments={data.payments}
               />
+
+              <Divider />
+
+              <DeactivateCustomerSection
+                onDeactivate={() => setIsDeactivateModalOpen(true)}
+              />
             </Stack>
           </Paper>
         ) : null}
@@ -1211,6 +1334,15 @@ export function CustomerDetailPage() {
             action={deletingAction}
             onClose={() => setDeletingAction(null)}
             onDeleted={refreshCustomerDetail}
+          />
+        ) : null}
+
+        {data ? (
+          <DeactivateCustomerModal
+            customerId={data.customer.id}
+            opened={isDeactivateModalOpen}
+            onClose={() => setIsDeactivateModalOpen(false)}
+            onDeactivated={() => navigate(customersPath)}
           />
         ) : null}
       </Stack>
