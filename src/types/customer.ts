@@ -67,10 +67,19 @@ export type CustomerDebtSummary = {
   review?: CustomerReview
 }
 
+export type CustomerBehavior = {
+  invoices: number
+  paidOnTime: number
+  paidLate: number
+  latePaymentPercentage: number
+  averageLateDays: number
+}
+
 export type CustomerDetailResponse = {
   customer: Customer
   debt: CustomerDebtSummary
   review?: CustomerReview
+  behavior: CustomerBehavior
   actions: CustomerAction[]
   payments: CustomerPayment[]
 }

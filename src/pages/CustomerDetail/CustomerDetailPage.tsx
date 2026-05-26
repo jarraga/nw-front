@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { type ReactNode, useEffect, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import {
   Alert,
@@ -26,12 +26,14 @@ import { QRCodeSVG } from 'qrcode.react'
 import {
   IconCash,
   IconDots,
+  IconInfoSquareRounded,
   IconInfoCircle,
   IconMail,
   IconMapPin,
   IconNotes,
   IconPencil,
   IconPhone,
+  IconTimelineEvent,
   IconTrash,
 } from '@tabler/icons-react'
 
@@ -44,6 +46,7 @@ import type {
   CompanyType,
   CustomerAction,
   CustomerActionType,
+  CustomerBehavior,
   CustomerDetailResponse,
 } from '../../types/customer'
 import { getErrorMessage } from '../../utils/error-message'
@@ -60,6 +63,16 @@ import {
 } from '../Customers/customerListState'
 
 const CUSTOMERS_URL = 'http://localhost:8080/customers'
+
+function buildCustomerDetailUrl(customerId: string, dueDay: number | null) {
+  const url = new URL(`${CUSTOMERS_URL}/${customerId}`)
+
+  if (dueDay !== null) {
+    url.searchParams.set('dueDay', dueDay.toString())
+  }
+
+  return url.toString()
+}
 
 type ContactModalData = {
   label: string
@@ -125,6 +138,13 @@ function formatDateTime(value: string) {
   return dateTimeFormatter.format(new Date(value))
 }
 
+function formatPercent(value: number) {
+  return `${value.toLocaleString('es-AR', {
+    maximumFractionDigits: 2,
+    minimumFractionDigits: 0,
+  })}%`
+}
+
 function getActionIcon(type: CustomerActionType) {
   if (type === 'call') return IconPhone
   if (type === 'email') return IconMail
@@ -154,6 +174,40 @@ function DebtInfoItem({ label, value }: { label: string; value: string }) {
         {value}
       </Text>
     </div>
+  )
+}
+
+function HighlightValue({ children }: { children: ReactNode }) {
+  return (
+    <Text component="span" fw={700}>
+      {children}
+    </Text>
+  )
+}
+
+function BehaviorSection({ behavior }: { behavior: CustomerBehavior }) {
+  return (
+    <Stack gap="md">
+      <Group gap="xs">
+        <ThemeIcon variant="light" radius="md">
+          <IconInfoSquareRounded size={18} />
+        </ThemeIcon>
+        <Title order={2}>Comportamiento</Title>
+      </Group>
+
+      <Alert color="gray" variant="light">
+        Historial de pagos: registra{' '}
+        <HighlightValue>{numberFormatter.format(behavior.invoices)}</HighlightValue>{' '}
+        facturas emitidas, con{' '}
+        <HighlightValue>{numberFormatter.format(behavior.paidLate)}</HighlightValue>{' '}
+        (<HighlightValue>{formatPercent(behavior.latePaymentPercentage)}</HighlightValue>)
+        pagos fuera de término y un atraso promedio de{' '}
+        <HighlightValue>
+          {numberFormatter.format(Math.ceil(behavior.averageLateDays))}
+        </HighlightValue>{' '}
+        días.
+      </Alert>
+    </Stack>
   )
 }
 
@@ -713,7 +767,12 @@ function ActionsSection({
   return (
     <Stack gap="md">
       <Group justify="space-between">
-        <Title order={2}>Acciones</Title>
+        <Group gap="xs">
+          <ThemeIcon variant="light" radius="md">
+            <IconTimelineEvent size={18} />
+          </ThemeIcon>
+          <Title order={2}>Acciones</Title>
+        </Group>
         <Button onClick={onAddAction}>Agregar acción</Button>
       </Group>
 
@@ -808,7 +867,7 @@ export function CustomerDetailPage() {
   const { customerId } = useParams()
   const location = useLocation()
   const navigate = useNavigate()
-  const { informantName } = useInformantSession()
+  const { dueDay, informantName } = useInformantSession()
   const { getCustomerViewers, notifyCustomerLeave, notifyCustomerView } =
     useCustomerViewers()
   const [status, setStatus] = useState<AsyncStatus>('loading')
@@ -836,7 +895,7 @@ export function CustomerDetailPage() {
       return
     }
 
-    const response = await fetch(`${CUSTOMERS_URL}/${customerId}`, {
+    const response = await fetch(buildCustomerDetailUrl(customerId, dueDay), {
       signal,
     })
 
@@ -879,7 +938,7 @@ export function CustomerDetailPage() {
     void fetchCustomer()
 
     return () => controller.abort()
-  }, [customerId])
+  }, [customerId, dueDay])
 
   useEffect(() => {
     const parsedCustomerID = customerId ? Number(customerId) : NaN
@@ -897,6 +956,7 @@ export function CustomerDetailPage() {
     ? getCustomerViewers(data.customer.id)
     : []
   const customerReview = getCustomerReview(data)
+  const effectiveDueDay = dueDay ?? data?.debt.dueDay ?? null
   const customersSearch =
     (location.state as { customersSearch?: string } | null)?.customersSearch ??
     localStorage.getItem(CUSTOMERS_SEARCH_STORAGE_KEY) ??
@@ -1019,7 +1079,11 @@ export function CustomerDetailPage() {
                 <SimpleGrid cols={{ base: 1, sm: 2, md: 3 }}>
                   <DebtInfoItem
                     label="Dia de vencimiento"
-                    value={numberFormatter.format(data.debt.dueDay)}
+                    value={
+                      effectiveDueDay === null
+                        ? '-'
+                        : numberFormatter.format(effectiveDueDay)
+                    }
                   />
                   <DebtInfoItem
                     label="Meses vencidos"
@@ -1031,6 +1095,10 @@ export function CustomerDetailPage() {
                   />
                 </SimpleGrid>
               </Stack>
+
+              <Divider />
+
+              <BehaviorSection behavior={data.behavior} />
 
               <Divider />
 
@@ -1067,7 +1135,7 @@ export function CustomerDetailPage() {
 
               <PaymentsSection
                 customerId={data.customer.id}
-                dueDay={data.debt.dueDay}
+                dueDay={effectiveDueDay ?? data.debt.dueDay}
                 onPaymentRegistered={refreshCustomerDetail}
                 payments={data.payments}
               />

@@ -2,11 +2,10 @@ import {
   createContext,
   type ReactNode,
   useContext,
-  useEffect,
   useMemo,
   useState,
 } from 'react'
-import { Button, Group, Modal, Stack, TextInput } from '@mantine/core'
+import { Button, Group, Modal, Select, Stack, TextInput } from '@mantine/core'
 
 const INFORMANT_NAME_STORAGE_KEY = 'informantName'
 const DUE_DAY_STORAGE_KEY = 'dueDay'
@@ -16,6 +15,7 @@ type InformantSession = {
   userID: string
   informantName: string
   dueDay: number | null
+  openSettings: () => void
 }
 
 const InformantSessionContext = createContext<InformantSession | null>(null)
@@ -64,38 +64,54 @@ export function useInformantSession() {
 
 export function InformantSessionProvider({ children }: { children: ReactNode }) {
   const [userID] = useState(readOrCreateUserID)
-  const [informantName, setInformantName] = useState('')
-  const [dueDay, setDueDay] = useState<number | null>(null)
-  const [draftInformantName, setDraftInformantName] = useState('')
-  const shouldAskForInformantName = informantName.trim() === ''
-
-  useEffect(() => {
-    const storedInformantName = readStoredInformantName()
+  const [informantName, setInformantName] = useState(readStoredInformantName)
+  const [dueDay, setDueDay] = useState<number | null>(readStoredDueDay)
+  const [draftInformantName, setDraftInformantName] = useState(
+    readStoredInformantName,
+  )
+  const [draftDueDay, setDraftDueDay] = useState<string | null>(() => {
     const storedDueDay = readStoredDueDay()
 
-    setInformantName(storedInformantName)
-    setDueDay(storedDueDay)
-    setDraftInformantName(storedInformantName)
-  }, [])
+    return storedDueDay?.toString() ?? null
+  })
+  const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false)
+  const shouldAskForSessionData = informantName.trim() === '' || dueDay === null
 
   const session = useMemo(
     () => ({
       userID,
       informantName,
       dueDay,
+      openSettings: () => {
+        setDraftInformantName(informantName)
+        setDraftDueDay(dueDay?.toString() ?? null)
+        setIsSettingsModalOpen(true)
+      },
     }),
     [dueDay, informantName, userID],
   )
 
   function handleSave() {
     const nextInformantName = draftInformantName.trim()
+    const nextDueDay = draftDueDay ? Number(draftDueDay) : NaN
 
-    if (!nextInformantName) {
+    if (!nextInformantName || !Number.isFinite(nextDueDay)) {
       return
     }
 
     localStorage.setItem(INFORMANT_NAME_STORAGE_KEY, nextInformantName)
+    localStorage.setItem(DUE_DAY_STORAGE_KEY, nextDueDay.toString())
     setInformantName(nextInformantName)
+    setDueDay(nextDueDay)
+    setIsSettingsModalOpen(false)
+  }
+
+  function handleSettingsClose() {
+    if (shouldAskForSessionData) {
+      return
+    }
+
+    setIsSettingsModalOpen(false)
   }
 
   return (
@@ -103,13 +119,13 @@ export function InformantSessionProvider({ children }: { children: ReactNode }) 
       {children}
 
       <Modal
-        opened={shouldAskForInformantName}
-        onClose={() => undefined}
-        title="Datos del informante"
+        opened={shouldAskForSessionData || isSettingsModalOpen}
+        onClose={handleSettingsClose}
+        title="Configuración"
         centered
-        closeOnClickOutside={false}
-        closeOnEscape={false}
-        withCloseButton={false}
+        closeOnClickOutside={!shouldAskForSessionData}
+        closeOnEscape={!shouldAskForSessionData}
+        withCloseButton={!shouldAskForSessionData}
       >
         <Stack gap="md">
           <TextInput
@@ -119,10 +135,23 @@ export function InformantSessionProvider({ children }: { children: ReactNode }) 
             required
           />
 
+          <Select
+            label="Día de vencimiento"
+            value={draftDueDay}
+            onChange={setDraftDueDay}
+            data={Array.from({ length: 30 }, (_, index) => {
+              const value = (index + 1).toString()
+
+              return { value, label: value }
+            })}
+            allowDeselect={false}
+            required
+          />
+
           <Group justify="flex-end">
             <Button
               onClick={handleSave}
-              disabled={draftInformantName.trim() === ''}
+              disabled={draftInformantName.trim() === '' || draftDueDay === null}
             >
               Guardar
             </Button>

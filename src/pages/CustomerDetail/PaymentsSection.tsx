@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import {
   Alert,
+  Badge,
   Button,
   Group,
   Modal,
@@ -44,6 +45,49 @@ const dateFormatter = new Intl.DateTimeFormat('es-AR', {
 
 function formatDate(value: string | null) {
   return value ? dateFormatter.format(new Date(value)) : '-'
+}
+
+function isPaymentOnTime({
+  dueDay,
+  month,
+  paidAt,
+  year,
+}: {
+  dueDay: number
+  month: number
+  paidAt: string
+  year: number
+}) {
+  const dueDate = buildDate(year, month, dueDay)
+  dueDate.setHours(23, 59, 59, 999)
+
+  return new Date(paidAt) <= dueDate
+}
+
+function PaymentStatusBadge({
+  dueDay,
+  month,
+  paidAt,
+  year,
+}: {
+  dueDay: number
+  month: number
+  paidAt: string
+  year: number
+}) {
+  if (isPaymentOnTime({ dueDay, month, paidAt, year })) {
+    return (
+      <Badge color="green" variant="light">
+        A tiempo
+      </Badge>
+    )
+  }
+
+  return (
+    <Badge color="yellow" variant="light">
+      Fuera de término
+    </Badge>
+  )
 }
 
 function groupPaymentsByYear(payments: CustomerPayment[]) {
@@ -253,7 +297,15 @@ export function PaymentsSection({
                           <Table.Td>{monthLabels[month - 1]}</Table.Td>
                           <Table.Td>
                             {payment?.paidAt ? (
-                              formatDate(payment.paidAt)
+                              <Group gap="xs">
+                                <Text>{formatDate(payment.paidAt)}</Text>
+                                <PaymentStatusBadge
+                                  dueDay={dueDay}
+                                  month={month}
+                                  paidAt={payment.paidAt}
+                                  year={year}
+                                />
+                              </Group>
                             ) : (
                               <Button
                                 size="xs"

@@ -278,7 +278,7 @@ export function HomePage() {
   const currentYear = currentDate.getFullYear()
   const currentMonth = currentDate.getMonth() + 1
   const [year, setYear] = useState(new Date().getFullYear())
-  const [dueDay, setDueDay] = useState(storedDueDay ?? 10)
+  const dueDay = storedDueDay ?? 10
   const [status, setStatus] = useState<AsyncStatus>('loading')
   const [errorMessage, setErrorMessage] = useState('')
   const [chartData, setChartData] = useState<MonthlyDelinquencyChartItem[]>([])
@@ -385,7 +385,7 @@ export function HomePage() {
                   </Text>
                 </div>
 
-                <SimpleGrid cols={{ base: 1, sm: 2 }} w={{ base: '100%', sm: 260 }}>
+                <SimpleGrid cols={{ base: 1 }} w={{ base: '100%', sm: 128 }}>
                   <NumberInput
                     label="Año"
                     min={2000}
@@ -393,14 +393,6 @@ export function HomePage() {
                     step={1}
                     value={year}
                     onChange={(value) => setYear(Number(value) || year)}
-                  />
-                  <NumberInput
-                    label="Día"
-                    min={1}
-                    max={31}
-                    step={1}
-                    value={dueDay}
-                    onChange={(value) => setDueDay(Number(value) || dueDay)}
                   />
                 </SimpleGrid>
               </Group>

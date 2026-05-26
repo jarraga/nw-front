@@ -27,6 +27,7 @@ import {
   Title,
   Tooltip,
 } from '@mantine/core'
+import { useMediaQuery } from '@mantine/hooks'
 import { IconEyeCheck } from '@tabler/icons-react'
 
 import { CustomerViewersAvatars } from '../../customer-viewers/CustomerViewersAvatars'
@@ -424,6 +425,7 @@ function CreateCustomerModal({
 
 export function CustomersPage() {
   const { dueDay } = useInformantSession()
+  const isCompactFilters = useMediaQuery('(max-width: 900px)')
   const [searchParams, setSearchParams] = useSearchParams()
   const companyNameInputRef = useRef<HTMLInputElement>(null)
   const companyNameDebounceRef = useRef<number | null>(null)
@@ -460,6 +462,9 @@ export function CustomersPage() {
   const [createErrorMessage, setCreateErrorMessage] = useState('')
   const totalPages = Math.ceil(total / PAGE_SIZE)
   const currentSearch = `?${searchParams.toString()}`
+  const filterSeparatorStyle = isCompactFilters
+    ? { borderTop: '1px solid var(--mantine-color-gray-3)' }
+    : { borderLeft: '1px solid var(--mantine-color-gray-3)' }
 
   useEffect(() => {
     const nextSearchParams = new URLSearchParams()
@@ -745,12 +750,14 @@ export function CustomersPage() {
               mb="md"
               style={{
                 display: 'grid',
-                gridTemplateColumns:
-                  'minmax(180px, 1fr) minmax(280px, 1.6fr) minmax(200px, 1.1fr) minmax(140px, 0.8fr) minmax(120px, 0.7fr)',
+                gap: isCompactFilters ? 'var(--mantine-spacing-md)' : 0,
+                gridTemplateColumns: isCompactFilters
+                  ? '1fr'
+                  : 'minmax(180px, 1fr) minmax(280px, 1.6fr) minmax(200px, 1.1fr) minmax(140px, 0.8fr) minmax(120px, 0.7fr)',
                 width: '100%',
               }}
             >
-              <Box pr="md">
+              <Box pr={isCompactFilters ? 0 : 'md'}>
                 <TextInput
                   ref={companyNameInputRef}
                   label="Buscar empresa"
@@ -771,7 +778,11 @@ export function CustomersPage() {
                 />
               </Box>
 
-              <Box px="md" style={{ borderLeft: '1px solid var(--mantine-color-gray-3)' }}>
+              <Box
+                px={isCompactFilters ? 0 : 'md'}
+                pt={isCompactFilters ? 'md' : 0}
+                style={filterSeparatorStyle}
+              >
                 <Radio.Group
                   label="Ordenar por"
                   value={sortBy}
@@ -784,7 +795,11 @@ export function CustomersPage() {
                 </Radio.Group>
               </Box>
 
-              <Box px="md" style={{ borderLeft: '1px solid var(--mantine-color-gray-3)' }}>
+              <Box
+                px={isCompactFilters ? 0 : 'md'}
+                pt={isCompactFilters ? 'md' : 0}
+                style={filterSeparatorStyle}
+              >
                 <Select
                   label="Tipo de empresa"
                   value={companyType}
@@ -800,12 +815,13 @@ export function CustomersPage() {
               </Box>
 
               <Box
-                pl="md"
+                pl={isCompactFilters ? 0 : 'md'}
+                pt={isCompactFilters ? 'md' : 0}
                 style={{
                   alignItems: 'flex-start',
-                  flexDirection: 'column',
-                  borderLeft: '1px solid var(--mantine-color-gray-3)',
+                  ...filterSeparatorStyle,
                   display: 'flex',
+                  flexDirection: 'column',
                   minHeight: 60,
                 }}
               >
@@ -827,10 +843,11 @@ export function CustomersPage() {
               </Box>
 
               <Box
-                px="md"
+                px={isCompactFilters ? 0 : 'md'}
+                pt={isCompactFilters ? 'md' : 0}
                 style={{
                   alignItems: 'center',
-                  borderLeft: '1px solid var(--mantine-color-gray-3)',
+                  ...filterSeparatorStyle,
                   display: 'flex',
                   justifyContent: 'center',
                   minHeight: 60,
