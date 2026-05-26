@@ -33,6 +33,7 @@ import { IconEyeCheck } from '@tabler/icons-react'
 
 import { CustomerViewersAvatars } from '../../customer-viewers/CustomerViewersAvatars'
 import { useCustomerViewers } from '../../customer-viewers/CustomerViewers'
+import { CUSTOMERS_URL } from '../../config/api'
 import { routePaths } from '../../routes/paths'
 import { useInformantSession } from '../../session/InformantSession'
 import type { AsyncStatus } from '../../types/async-status'
@@ -48,10 +49,8 @@ import {
   LAST_VISITED_CUSTOMER_STORAGE_KEY,
 } from './customerListState'
 
-const CUSTOMERS_DEBT_LIST_URL = 'http://localhost:8080/customers/debt-list'
-const CUSTOMERS_URL = 'http://localhost:8080/customers'
-const REVIEWED_DEBTORS_PERCENTAGE_URL =
-  'http://localhost:8080/customers/reviewed-debtors-percentage'
+const CUSTOMERS_DEBT_LIST_URL = `${CUSTOMERS_URL}/debt-list`
+const REVIEWED_DEBTORS_PERCENTAGE_URL = `${CUSTOMERS_URL}/reviewed-debtors-percentage`
 const PAGE_SIZE = 50
 const ALL_COMPANY_TYPES = 'all'
 const INCLUDE_REVIEWED_STORAGE_KEY = 'includeReviewed'

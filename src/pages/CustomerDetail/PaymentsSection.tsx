@@ -15,10 +15,10 @@ import {
 } from '@mantine/core'
 import { IconCalendarDollar } from '@tabler/icons-react'
 
+import { CUSTOMERS_URL } from '../../config/api'
 import type { CustomerPayment } from '../../types/customer'
 import { getErrorMessage } from '../../utils/error-message'
 
-const CUSTOMERS_URL = 'http://localhost:8080/customers'
 const currentDate = new Date()
 const currentYear = currentDate.getFullYear()
 

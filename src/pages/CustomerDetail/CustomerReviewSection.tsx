@@ -13,10 +13,9 @@ import {
 } from '@mantine/core'
 import { IconEyeCheck } from '@tabler/icons-react'
 
+import { CUSTOMERS_URL } from '../../config/api'
 import type { CustomerDetailResponse, CustomerReview } from '../../types/customer'
 import { getErrorMessage } from '../../utils/error-message'
-
-const CUSTOMERS_URL = 'http://localhost:8080/customers'
 
 const emptyReview: CustomerReview = {
   reviewedAt: null,

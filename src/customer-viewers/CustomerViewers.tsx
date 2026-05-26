@@ -10,8 +10,9 @@ import {
 } from 'react'
 
 import { useInformantSession } from '../session/InformantSession'
+import { buildWebSocketUrl } from '../config/api'
 
-const CUSTOMER_VIEWERS_WS_URL = 'ws://localhost:8080/ws/customer-viewers'
+const CUSTOMER_VIEWERS_WS_URL = buildWebSocketUrl('/ws/customer-viewers')
 
 export type CustomerViewer = {
   userID: string

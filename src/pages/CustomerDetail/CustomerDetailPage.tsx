@@ -40,6 +40,7 @@ import {
 
 import { CustomerViewersAvatars } from '../../customer-viewers/CustomerViewersAvatars'
 import { useCustomerViewers } from '../../customer-viewers/CustomerViewers'
+import { CUSTOMERS_URL } from '../../config/api'
 import { routePaths } from '../../routes/paths'
 import { useInformantSession } from '../../session/InformantSession'
 import type { AsyncStatus } from '../../types/async-status'
@@ -62,8 +63,6 @@ import {
   CUSTOMERS_SEARCH_STORAGE_KEY,
   LAST_VISITED_CUSTOMER_STORAGE_KEY,
 } from '../Customers/customerListState'
-
-const CUSTOMERS_URL = 'http://localhost:8080/customers'
 
 function buildCustomerDetailUrl(customerId: string, dueDay: number | null) {
   const url = new URL(`${CUSTOMERS_URL}/${customerId}`)

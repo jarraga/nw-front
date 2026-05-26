@@ -26,13 +26,13 @@ import {
   YAxis,
 } from 'recharts'
 
+import { CUSTOMERS_URL } from '../../config/api'
 import { useInformantSession } from '../../session/InformantSession'
 import type { AsyncStatus } from '../../types/async-status'
 import { getErrorMessage } from '../../utils/error-message'
 
-const MONTHLY_DELINQUENCY_URL =
-  'http://localhost:8080/customers/monthly-delinquency'
-const CUSTOMER_METRICS_URL = 'http://localhost:8080/customers/metrics'
+const MONTHLY_DELINQUENCY_URL = `${CUSTOMERS_URL}/monthly-delinquency`
+const CUSTOMER_METRICS_URL = `${CUSTOMERS_URL}/metrics`
 
 const monthLabels = [
   'Ene',
