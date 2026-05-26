@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import {
   Anchor,
   Alert,
@@ -41,6 +41,10 @@ import type {
   CustomerDebtSortBy,
 } from '../../types/customer'
 import { getErrorMessage } from '../../utils/error-message'
+import {
+  CUSTOMERS_SEARCH_STORAGE_KEY,
+  LAST_VISITED_CUSTOMER_STORAGE_KEY,
+} from './customerListState'
 
 const CUSTOMERS_DEBT_LIST_URL = 'http://localhost:8080/customers/debt-list'
 const CUSTOMERS_URL = 'http://localhost:8080/customers'
@@ -103,6 +107,48 @@ function readStoredIncludeReviewed() {
   }
 
   return storedIncludeReviewed === 'true'
+}
+
+function readNumberSearchParam(
+  searchParams: URLSearchParams,
+  key: string,
+  fallback: number,
+) {
+  const parsedValue = Number(searchParams.get(key))
+
+  return Number.isFinite(parsedValue) && parsedValue > 0
+    ? parsedValue
+    : fallback
+}
+
+function readSortBySearchParam(searchParams: URLSearchParams) {
+  const sortBy = searchParams.get('sortBy')
+
+  return sortBy === 'months' || sortBy === 'amount' ? sortBy : 'amount'
+}
+
+function readCompanyTypeSearchParam(searchParams: URLSearchParams) {
+  const companyType = searchParams.get('companyType')
+
+  if (
+    companyType === 'enterprise' ||
+    companyType === 'pyme' ||
+    companyType === 'startup'
+  ) {
+    return companyType
+  }
+
+  return ALL_COMPANY_TYPES
+}
+
+function readIncludeReviewedSearchParam(searchParams: URLSearchParams) {
+  const includeReviewed = searchParams.get('includeReviewed')
+
+  if (includeReviewed === null) {
+    return readStoredIncludeReviewed()
+  }
+
+  return includeReviewed === 'true'
 }
 
 function formatDate(value: string) {
@@ -171,7 +217,15 @@ function buildCustomersUrl(
   return url.toString()
 }
 
-function CustomersTable({ customers }: { customers: CustomerDebt[] }) {
+function CustomersTable({
+  customers,
+  lastVisitedCustomerID,
+  search,
+}: {
+  customers: CustomerDebt[]
+  lastVisitedCustomerID: string
+  search: string
+}) {
   const { getCustomerViewers } = useCustomerViewers()
 
   return (
@@ -202,6 +256,7 @@ function CustomersTable({ customers }: { customers: CustomerDebt[] }) {
         <Table.Tbody>
           {customers.map((customer) => {
             const viewers = getCustomerViewers(customer.id)
+            const isLastVisited = customer.id.toString() === lastVisitedCustomerID
 
             return (
               <Table.Tr
@@ -209,9 +264,26 @@ function CustomersTable({ customers }: { customers: CustomerDebt[] }) {
                 bg={viewers.length > 0 ? 'blue.0' : undefined}
               >
                 <Table.Td>
-                  <Anchor component={Link} to={routePaths.customerDetail(customer.id)}>
-                    {customer.companyName}
-                  </Anchor>
+                  <Group gap="xs" wrap="nowrap">
+                    {isLastVisited ? (
+                      <Box
+                        bg="blue"
+                        style={{
+                          alignSelf: 'stretch',
+                          borderRadius: 999,
+                          minHeight: 24,
+                          width: 4,
+                        }}
+                      />
+                    ) : null}
+                    <Anchor
+                      component={Link}
+                      state={{ customersSearch: search }}
+                      to={routePaths.customerDetail(customer.id)}
+                    >
+                      {customer.companyName}
+                    </Anchor>
+                  </Group>
                 </Table.Td>
                 <Table.Td>{companyTypeLabels[customer.companyType]}</Table.Td>
                 <Table.Td>{formatDate(customer.billingStartedAt)}</Table.Td>
@@ -352,6 +424,7 @@ function CreateCustomerModal({
 
 export function CustomersPage() {
   const { dueDay } = useInformantSession()
+  const [searchParams, setSearchParams] = useSearchParams()
   const companyNameInputRef = useRef<HTMLInputElement>(null)
   const companyNameDebounceRef = useRef<number | null>(null)
   const [status, setStatus] = useState<AsyncStatus>('loading')
@@ -359,15 +432,26 @@ export function CustomersPage() {
   const [customers, setCustomers] = useState<CustomerDebt[]>([])
   const [total, setTotal] = useState(0)
   const [refreshKey, setRefreshKey] = useState(0)
-  const [activePage, setActivePage] = useState(1)
-  const [sortBy, setSortBy] = useState<CustomerDebtSortBy>('amount')
-  const [companyName, setCompanyName] = useState('')
-  const [debouncedCompanyName, setDebouncedCompanyName] = useState('')
+  const [activePage, setActivePage] = useState(() =>
+    readNumberSearchParam(searchParams, 'page', 1),
+  )
+  const [sortBy, setSortBy] = useState<CustomerDebtSortBy>(() =>
+    readSortBySearchParam(searchParams),
+  )
+  const [companyName, setCompanyName] = useState(
+    () => searchParams.get('companyName') ?? '',
+  )
+  const [debouncedCompanyName, setDebouncedCompanyName] = useState(
+    () => searchParams.get('companyName') ?? '',
+  )
   const [companyType, setCompanyType] = useState<
     CompanyType | typeof ALL_COMPANY_TYPES
-  >(ALL_COMPANY_TYPES)
+  >(() => readCompanyTypeSearchParam(searchParams))
   const [includeReviewed, setIncludeReviewed] = useState(
-    readStoredIncludeReviewed,
+    () => readIncludeReviewedSearchParam(searchParams),
+  )
+  const [lastVisitedCustomerID, setLastVisitedCustomerID] = useState(
+    () => localStorage.getItem(LAST_VISITED_CUSTOMER_STORAGE_KEY)?.trim() ?? '',
   )
   const [errorMessage, setErrorMessage] = useState('')
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
@@ -375,6 +459,42 @@ export function CustomersPage() {
   const [isCreating, setIsCreating] = useState(false)
   const [createErrorMessage, setCreateErrorMessage] = useState('')
   const totalPages = Math.ceil(total / PAGE_SIZE)
+  const currentSearch = `?${searchParams.toString()}`
+
+  useEffect(() => {
+    const nextSearchParams = new URLSearchParams()
+
+    nextSearchParams.set('page', activePage.toString())
+    nextSearchParams.set('sortBy', sortBy)
+    nextSearchParams.set('includeReviewed', includeReviewed.toString())
+
+    if (companyName.trim()) {
+      nextSearchParams.set('companyName', companyName.trim())
+    }
+
+    if (companyType !== ALL_COMPANY_TYPES) {
+      nextSearchParams.set('companyType', companyType)
+    }
+
+    setSearchParams(nextSearchParams, { replace: true })
+    localStorage.setItem(
+      CUSTOMERS_SEARCH_STORAGE_KEY,
+      `?${nextSearchParams.toString()}`,
+    )
+  }, [
+    activePage,
+    companyName,
+    companyType,
+    includeReviewed,
+    setSearchParams,
+    sortBy,
+  ])
+
+  useEffect(() => {
+    setLastVisitedCustomerID(
+      localStorage.getItem(LAST_VISITED_CUSTOMER_STORAGE_KEY)?.trim() ?? '',
+    )
+  }, [customers])
 
   useEffect(() => {
     if (companyNameDebounceRef.current !== null) {
@@ -479,6 +599,22 @@ export function CustomersPage() {
     localStorage.setItem(INCLUDE_REVIEWED_STORAGE_KEY, value.toString())
     setIncludeReviewed(value)
     setActivePage(1)
+  }
+
+  function handleResetFilters() {
+    if (companyNameDebounceRef.current !== null) {
+      window.clearTimeout(companyNameDebounceRef.current)
+      companyNameDebounceRef.current = null
+    }
+
+    localStorage.setItem(INCLUDE_REVIEWED_STORAGE_KEY, 'true')
+    setCompanyName('')
+    setDebouncedCompanyName('')
+    setSortBy('amount')
+    setCompanyType(ALL_COMPANY_TYPES)
+    setIncludeReviewed(true)
+    setActivePage(1)
+    companyNameInputRef.current?.focus()
   }
 
   function handleCreateFormChange(
@@ -610,7 +746,7 @@ export function CustomersPage() {
               style={{
                 display: 'grid',
                 gridTemplateColumns:
-                  'minmax(180px, 1fr) minmax(280px, 1.6fr) minmax(200px, 1.1fr) minmax(140px, 0.8fr)',
+                  'minmax(180px, 1fr) minmax(280px, 1.6fr) minmax(200px, 1.1fr) minmax(140px, 0.8fr) minmax(120px, 0.7fr)',
                 width: '100%',
               }}
             >
@@ -689,10 +825,41 @@ export function CustomersPage() {
                   }
                 />
               </Box>
+
+              <Box
+                px="md"
+                style={{
+                  alignItems: 'center',
+                  borderLeft: '1px solid var(--mantine-color-gray-3)',
+                  display: 'flex',
+                  justifyContent: 'center',
+                  minHeight: 60,
+                }}
+              >
+                <Button
+                  c="dimmed"
+                  fullWidth
+                  style={{
+                    height: 'auto',
+                    lineHeight: 1.2,
+                    minHeight: 44,
+                    textAlign: 'center',
+                    whiteSpace: 'normal',
+                  }}
+                  variant="default"
+                  onClick={handleResetFilters}
+                >
+                  Limpiar<br />filtros
+                </Button>
+              </Box>
             </Box>
 
             {customers.length > 0 ? (
-              <CustomersTable customers={customers} />
+              <CustomersTable
+                customers={customers}
+                lastVisitedCustomerID={lastVisitedCustomerID}
+                search={currentSearch}
+              />
             ) : null}
 
             {status === 'ok' && totalPages > 1 ? (

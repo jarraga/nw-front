@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import {
   Alert,
   Anchor,
@@ -54,6 +54,10 @@ import {
   ReviewSection,
 } from './CustomerReviewSection'
 import { PaymentsSection } from './PaymentsSection'
+import {
+  CUSTOMERS_SEARCH_STORAGE_KEY,
+  LAST_VISITED_CUSTOMER_STORAGE_KEY,
+} from '../Customers/customerListState'
 
 const CUSTOMERS_URL = 'http://localhost:8080/customers'
 
@@ -802,6 +806,7 @@ function ActionsSection({
 
 export function CustomerDetailPage() {
   const { customerId } = useParams()
+  const location = useLocation()
   const navigate = useNavigate()
   const { informantName } = useInformantSession()
   const { getCustomerViewers, notifyCustomerLeave, notifyCustomerView } =
@@ -892,11 +897,22 @@ export function CustomerDetailPage() {
     ? getCustomerViewers(data.customer.id)
     : []
   const customerReview = getCustomerReview(data)
+  const customersSearch =
+    (location.state as { customersSearch?: string } | null)?.customersSearch ??
+    localStorage.getItem(CUSTOMERS_SEARCH_STORAGE_KEY) ??
+    ''
+  const customersPath = `${routePaths.customers}${customersSearch}`
+
+  useEffect(() => {
+    if (customerId) {
+      localStorage.setItem(LAST_VISITED_CUSTOMER_STORAGE_KEY, customerId)
+    }
+  }, [customerId])
 
   return (
     <Container size="lg" py="xl">
       <Stack gap="lg">
-        <Anchor component={Link} to={routePaths.customers}>
+        <Anchor component={Link} to={customersPath}>
           Volver a clientes
         </Anchor>
 
