@@ -1,40 +1,25 @@
 import { useEffect, useRef, useState } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
+import { useSearchParams } from 'react-router-dom'
 import {
-  Anchor,
   Alert,
   Badge,
   Box,
   Button,
   Center,
-  CloseButton,
   Container,
   Group,
   Loader,
   LoadingOverlay,
-  Modal,
   Pagination,
   Paper,
-  Radio,
-  ScrollArea,
-  Select,
   Stack,
-  Switch,
-  Table,
   Text,
-  TextInput,
-  Textarea,
   ThemeIcon,
   Title,
-  Tooltip,
 } from '@mantine/core'
-import { useMediaQuery } from '@mantine/hooks'
-import { IconEyeCheck, IconUsers } from '@tabler/icons-react'
+import { IconUsers } from '@tabler/icons-react'
 
-import { CustomerViewersAvatars } from '../../customer-viewers/CustomerViewersAvatars'
-import { useCustomerViewers } from '../../customer-viewers/CustomerViewers'
 import { CUSTOMERS_URL } from '../../config/api'
-import { routePaths } from '../../routes/paths'
 import { useInformantSession } from '../../session/InformantSession'
 import type { AsyncStatus } from '../../types/async-status'
 import type {
@@ -44,417 +29,33 @@ import type {
   CustomerDebtSortBy,
 } from '../../types/customer'
 import { getErrorMessage } from '../../utils/error-message'
+import { CreateCustomerModal } from './CreateCustomerModal'
+import { CustomerFilters } from './CustomerFilters'
 import {
   CUSTOMERS_SEARCH_STORAGE_KEY,
   LAST_VISITED_CUSTOMER_STORAGE_KEY,
 } from './customerListState'
-
-const CUSTOMERS_DEBT_LIST_URL = `${CUSTOMERS_URL}/debt-list`
-const REVIEWED_DEBTORS_PERCENTAGE_URL = `${CUSTOMERS_URL}/reviewed-debtors-percentage`
-const PAGE_SIZE = 50
-const ALL_COMPANY_TYPES = 'all'
-const INCLUDE_REVIEWED_STORAGE_KEY = 'includeReviewed'
-
-const companyTypeLabels: Record<CompanyType, string> = {
-  enterprise: 'Empresa',
-  pyme: 'PyME',
-  startup: 'Startup',
-}
-
-const numberFormatter = new Intl.NumberFormat('es-AR')
-const currencyFormatter = new Intl.NumberFormat('es-AR', {
-  style: 'currency',
-  currency: 'ARS',
-  maximumFractionDigits: 0,
-})
-const dateFormatter = new Intl.DateTimeFormat('es-AR', {
-  day: '2-digit',
-  month: '2-digit',
-  year: 'numeric',
-})
-const percentFormatter = new Intl.NumberFormat('es-AR', {
-  maximumFractionDigits: 1,
-  minimumFractionDigits: 0,
-})
-const dateTimeFormatter = new Intl.DateTimeFormat('es-AR', {
-  day: '2-digit',
-  month: '2-digit',
-  year: 'numeric',
-  hour: '2-digit',
-  minute: '2-digit',
-})
-
-type CreateCustomerForm = {
-  companyName: string
-  companyType: CompanyType
-  phone: string
-  email: string
-  monthlyFee: string
-  billingStartedAt: string
-  comments: string
-}
-
-function createEmptyCustomerForm(): CreateCustomerForm {
-  return {
-    companyName: '',
-    companyType: 'enterprise',
-    phone: '',
-    email: '',
-    monthlyFee: '',
-    billingStartedAt: '',
-    comments: '',
-  }
-}
-
-function readStoredIncludeReviewed() {
-  const storedIncludeReviewed = localStorage.getItem(INCLUDE_REVIEWED_STORAGE_KEY)
-
-  if (storedIncludeReviewed === null) {
-    return true
-  }
-
-  return storedIncludeReviewed === 'true'
-}
-
-function normalizePercentage(value: number) {
-  return value <= 1 ? value * 100 : value
-}
-
-function getReviewedDebtorsPercentage(data: unknown) {
-  if (typeof data === 'number') {
-    return normalizePercentage(data)
-  }
-
-  if (!data || typeof data !== 'object') {
-    return null
-  }
-
-  const record = data as Record<string, unknown>
-  const rawValue =
-    record.percentage ??
-    record.reviewedDebtorsPercentage ??
-    record.reviewedPercentage ??
-    record.value
-
-  return typeof rawValue === 'number' ? normalizePercentage(rawValue) : null
-}
-
-function readNumberSearchParam(
-  searchParams: URLSearchParams,
-  key: string,
-  fallback: number,
-) {
-  const parsedValue = Number(searchParams.get(key))
-
-  return Number.isFinite(parsedValue) && parsedValue > 0
-    ? parsedValue
-    : fallback
-}
-
-function readSortBySearchParam(searchParams: URLSearchParams) {
-  const sortBy = searchParams.get('sortBy')
-
-  return sortBy === 'months' || sortBy === 'amount' ? sortBy : 'amount'
-}
-
-function readCompanyTypeSearchParam(searchParams: URLSearchParams) {
-  const companyType = searchParams.get('companyType')
-
-  if (
-    companyType === 'enterprise' ||
-    companyType === 'pyme' ||
-    companyType === 'startup'
-  ) {
-    return companyType
-  }
-
-  return ALL_COMPANY_TYPES
-}
-
-function readIncludeReviewedSearchParam(searchParams: URLSearchParams) {
-  const includeReviewed = searchParams.get('includeReviewed')
-
-  if (includeReviewed === null) {
-    return readStoredIncludeReviewed()
-  }
-
-  return includeReviewed === 'true'
-}
-
-function formatDate(value: string) {
-  return dateFormatter.format(new Date(value))
-}
-
-function formatNullableDateTime(value: string | null) {
-  return value ? dateTimeFormatter.format(new Date(value)) : '-'
-}
-
-function ReviewIndicator({ review }: { review: CustomerDebt['review'] }) {
-  if (!review.isReviewed) {
-    return null
-  }
-
-  return (
-    <Tooltip
-      withArrow
-      label={
-        <Stack gap={4}>
-          <Text size="sm">Revisado: {formatNullableDateTime(review.reviewedAt)}</Text>
-          <Text size="sm">Por: {review.reviewedBy ?? '-'}</Text>
-          <Text size="sm">
-            No revisar hasta: {formatNullableDateTime(review.reviewedUntil)}
-          </Text>
-        </Stack>
-      }
-    >
-      <ThemeIcon variant="light" color="green" radius="xl" size="sm">
-        <IconEyeCheck size={16} />
-      </ThemeIcon>
-    </Tooltip>
-  )
-}
-
-function buildCustomersUrl(
-  page: number,
-  sortBy: CustomerDebtSortBy,
-  companyType: CompanyType | typeof ALL_COMPANY_TYPES,
-  companyName: string,
-  includeReviewed: boolean,
-  dueDay: number | null,
-) {
-  const offset = (page - 1) * PAGE_SIZE
-  const url = new URL(CUSTOMERS_DEBT_LIST_URL)
-  url.searchParams.set('limit', PAGE_SIZE.toString())
-  url.searchParams.set('offset', offset.toString())
-  url.searchParams.set('sortBy', sortBy)
-
-  if (companyType !== ALL_COMPANY_TYPES) {
-    url.searchParams.set('companyType', companyType)
-  }
-
-  const trimmedCompanyName = companyName.trim()
-
-  if (trimmedCompanyName) {
-    url.searchParams.set('companyName', trimmedCompanyName)
-  }
-
-  url.searchParams.set('includeReviewed', includeReviewed.toString())
-
-  if (dueDay !== null) {
-    url.searchParams.set('dueDay', dueDay.toString())
-  }
-
-  return url.toString()
-}
-
-function CustomersTable({
-  customers,
-  lastVisitedCustomerID,
-  search,
-}: {
-  customers: CustomerDebt[]
-  lastVisitedCustomerID: string
-  search: string
-}) {
-  const { getCustomerViewers } = useCustomerViewers()
-
-  return (
-    <ScrollArea>
-      <Table striped highlightOnHover withTableBorder withColumnBorders>
-        <Table.Thead>
-          <Table.Tr>
-            <Table.Th>Empresa</Table.Th>
-            <Table.Th>Tipo de empresa</Table.Th>
-            <Table.Th>Inicio de facturacion</Table.Th>
-            <Table.Th>Abono mensual</Table.Th>
-            <Table.Th>Meses vencidos</Table.Th>
-            <Table.Th>Monto vencido</Table.Th>
-            <Table.Th
-              ta="center"
-              style={{ width: 96, minWidth: 96, maxWidth: 96 }}
-            >
-              Revisado
-            </Table.Th>
-            <Table.Th
-              ta="center"
-              style={{ width: 104, minWidth: 104, maxWidth: 104 }}
-            >
-              Viendo
-            </Table.Th>
-          </Table.Tr>
-        </Table.Thead>
-        <Table.Tbody>
-          {customers.map((customer) => {
-            const viewers = getCustomerViewers(customer.id)
-            const isLastVisited = customer.id.toString() === lastVisitedCustomerID
-
-            return (
-              <Table.Tr
-                key={customer.id}
-                bg={viewers.length > 0 ? 'blue.0' : undefined}
-              >
-                <Table.Td>
-                  <Group gap="xs" wrap="nowrap">
-                    {isLastVisited ? (
-                      <Box
-                        bg="blue"
-                        style={{
-                          alignSelf: 'stretch',
-                          borderRadius: 999,
-                          minHeight: 24,
-                          width: 4,
-                        }}
-                      />
-                    ) : null}
-                    <Anchor
-                      component={Link}
-                      state={{ customersSearch: search }}
-                      to={routePaths.customerDetail(customer.id)}
-                    >
-                      {customer.companyName}
-                    </Anchor>
-                  </Group>
-                </Table.Td>
-                <Table.Td>{companyTypeLabels[customer.companyType]}</Table.Td>
-                <Table.Td>{formatDate(customer.billingStartedAt)}</Table.Td>
-                <Table.Td>{currencyFormatter.format(customer.monthlyFee)}</Table.Td>
-                <Table.Td>{numberFormatter.format(customer.overdueMonths)}</Table.Td>
-                <Table.Td>{currencyFormatter.format(customer.overdueAmount)}</Table.Td>
-                <Table.Td
-                  ta="center"
-                  style={{ width: 96, minWidth: 96, maxWidth: 96 }}
-                >
-                  <Group justify="center">
-                    <ReviewIndicator review={customer.review} />
-                  </Group>
-                </Table.Td>
-                <Table.Td
-                  ta="center"
-                  style={{ width: 104, minWidth: 104, maxWidth: 104 }}
-                >
-                  <CustomerViewersAvatars
-                    justify="center"
-                    maxVisible={3}
-                    viewers={viewers}
-                  />
-                </Table.Td>
-              </Table.Tr>
-            )
-          })}
-        </Table.Tbody>
-      </Table>
-    </ScrollArea>
-  )
-}
-
-function CreateCustomerModal({
-  errorMessage,
-  form,
-  isSaving,
-  onChange,
-  onClose,
-  onSave,
-  opened,
-}: {
-  errorMessage: string
-  form: CreateCustomerForm
-  isSaving: boolean
-  onChange: (field: keyof CreateCustomerForm, value: string) => void
-  onClose: () => void
-  onSave: () => void
-  opened: boolean
-}) {
-  const canSave =
-    form.companyName.trim() !== '' &&
-    form.monthlyFee.trim() !== '' &&
-    form.billingStartedAt.trim() !== ''
-
-  return (
-    <Modal opened={opened} onClose={onClose} title="Crear cliente" centered>
-      <Stack gap="md">
-        <TextInput
-          label="Empresa"
-          value={form.companyName}
-          onChange={(event) =>
-            onChange('companyName', event.currentTarget.value)
-          }
-          required
-        />
-
-        <Select
-          label="Tipo de empresa"
-          value={form.companyType}
-          onChange={(value) =>
-            onChange('companyType', (value ?? 'enterprise') as CompanyType)
-          }
-          data={[
-            { value: 'enterprise', label: companyTypeLabels.enterprise },
-            { value: 'pyme', label: companyTypeLabels.pyme },
-            { value: 'startup', label: companyTypeLabels.startup },
-          ]}
-          allowDeselect={false}
-          required
-        />
-
-        <TextInput
-          label="Telefono"
-          value={form.phone}
-          onChange={(event) => onChange('phone', event.currentTarget.value)}
-        />
-
-        <TextInput
-          label="Email"
-          type="email"
-          value={form.email}
-          onChange={(event) => onChange('email', event.currentTarget.value)}
-        />
-
-        <TextInput
-          label="Abono mensual"
-          type="number"
-          min={0}
-          value={form.monthlyFee}
-          onChange={(event) =>
-            onChange('monthlyFee', event.currentTarget.value)
-          }
-          required
-        />
-
-        <TextInput
-          label="Inicio de facturacion"
-          type="date"
-          value={form.billingStartedAt}
-          onChange={(event) =>
-            onChange('billingStartedAt', event.currentTarget.value)
-          }
-          required
-        />
-
-        <Textarea
-          label="Comentarios"
-          rows={4}
-          value={form.comments}
-          onChange={(event) => onChange('comments', event.currentTarget.value)}
-        />
-
-        {errorMessage ? <Alert color="red">{errorMessage}</Alert> : null}
-
-        <Group justify="flex-end">
-          <Button variant="default" onClick={onClose} disabled={isSaving}>
-            Cancelar
-          </Button>
-          <Button onClick={onSave} loading={isSaving} disabled={!canSave}>
-            Crear
-          </Button>
-        </Group>
-      </Stack>
-    </Modal>
-  )
-}
+import { CustomersTable } from './CustomersTable'
+import {
+  ALL_COMPANY_TYPES,
+  buildCustomersUrl,
+  createEmptyCustomerForm,
+  type CreateCustomerForm,
+  type CustomerCompanyTypeFilter,
+  getReviewedDebtorsPercentage,
+  INCLUDE_REVIEWED_STORAGE_KEY,
+  numberFormatter,
+  PAGE_SIZE,
+  percentFormatter,
+  readCompanyTypeSearchParam,
+  readIncludeReviewedSearchParam,
+  readNumberSearchParam,
+  readSortBySearchParam,
+  REVIEWED_DEBTORS_PERCENTAGE_URL,
+} from './customersHelpers'
 
 export function CustomersPage() {
   const { dueDay } = useInformantSession()
-  const isCompactFilters = useMediaQuery('(max-width: 900px)')
   const [searchParams, setSearchParams] = useSearchParams()
   const companyNameInputRef = useRef<HTMLInputElement>(null)
   const companyNameDebounceRef = useRef<number | null>(null)
@@ -475,9 +76,9 @@ export function CustomersPage() {
   const [debouncedCompanyName, setDebouncedCompanyName] = useState(
     () => searchParams.get('companyName') ?? '',
   )
-  const [companyType, setCompanyType] = useState<
-    CompanyType | typeof ALL_COMPANY_TYPES
-  >(() => readCompanyTypeSearchParam(searchParams))
+  const [companyType, setCompanyType] = useState<CustomerCompanyTypeFilter>(
+    () => readCompanyTypeSearchParam(searchParams),
+  )
   const [includeReviewed, setIncludeReviewed] = useState(
     () => readIncludeReviewedSearchParam(searchParams),
   )
@@ -494,6 +95,7 @@ export function CustomersPage() {
   >(null)
   const [reviewedDebtorsPercentageStatus, setReviewedDebtorsPercentageStatus] =
     useState<AsyncStatus>('loading')
+
   const totalPages = Math.ceil(total / PAGE_SIZE)
   const currentSearch = `?${searchParams.toString()}`
   const hasCustomers = customers.length > 0
@@ -502,9 +104,6 @@ export function CustomersPage() {
     companyType !== ALL_COMPANY_TYPES ||
     sortBy !== 'amount' ||
     !includeReviewed
-  const filterSeparatorStyle = isCompactFilters
-    ? { borderTop: '1px solid var(--mantine-color-gray-3)' }
-    : { borderLeft: '1px solid var(--mantine-color-gray-3)' }
 
   useEffect(() => {
     const nextSearchParams = new URLSearchParams()
@@ -534,12 +133,6 @@ export function CustomersPage() {
     setSearchParams,
     sortBy,
   ])
-
-  useEffect(() => {
-    setLastVisitedCustomerID(
-      localStorage.getItem(LAST_VISITED_CUSTOMER_STORAGE_KEY)?.trim() ?? '',
-    )
-  }, [customers])
 
   useEffect(() => {
     if (companyNameDebounceRef.current !== null) {
@@ -621,6 +214,9 @@ export function CustomersPage() {
         const data = (await response.json()) as CustomerDebtListResponse
         setCustomers(data.items)
         setTotal(data.total)
+        setLastVisitedCustomerID(
+          localStorage.getItem(LAST_VISITED_CUSTOMER_STORAGE_KEY)?.trim() ?? '',
+        )
         setHasLoadedCustomers(true)
         setStatus('ok')
       } catch (error) {
@@ -652,7 +248,7 @@ export function CustomersPage() {
   }
 
   function handleCompanyTypeChange(value: string | null) {
-    setCompanyType((value ?? ALL_COMPANY_TYPES) as CompanyType | typeof ALL_COMPANY_TYPES)
+    setCompanyType((value ?? ALL_COMPANY_TYPES) as CustomerCompanyTypeFilter)
     setActivePage(1)
   }
 
@@ -662,11 +258,7 @@ export function CustomersPage() {
   }
 
   function handleClearCompanyName() {
-    if (companyNameDebounceRef.current !== null) {
-      window.clearTimeout(companyNameDebounceRef.current)
-      companyNameDebounceRef.current = null
-    }
-
+    clearCompanyNameDebounce()
     setCompanyName('')
     setDebouncedCompanyName('')
     setActivePage(1)
@@ -680,11 +272,7 @@ export function CustomersPage() {
   }
 
   function handleResetFilters() {
-    if (companyNameDebounceRef.current !== null) {
-      window.clearTimeout(companyNameDebounceRef.current)
-      companyNameDebounceRef.current = null
-    }
-
+    clearCompanyNameDebounce()
     localStorage.setItem(INCLUDE_REVIEWED_STORAGE_KEY, 'true')
     setCompanyName('')
     setDebouncedCompanyName('')
@@ -693,6 +281,13 @@ export function CustomersPage() {
     setIncludeReviewed(true)
     setActivePage(1)
     companyNameInputRef.current?.focus()
+  }
+
+  function clearCompanyNameDebounce() {
+    if (companyNameDebounceRef.current !== null) {
+      window.clearTimeout(companyNameDebounceRef.current)
+      companyNameDebounceRef.current = null
+    }
   }
 
   function handleCreateFormChange(
@@ -813,10 +408,7 @@ export function CustomersPage() {
             {status === 'ok' ? (
               <Text fw={600}>{numberFormatter.format(total)} clientes</Text>
             ) : null}
-            <Button
-              variant="light"
-              onClick={() => setIsCreateModalOpen(true)}
-            >
+            <Button variant="light" onClick={() => setIsCreateModalOpen(true)}>
               Crear
             </Button>
           </Group>
@@ -847,7 +439,7 @@ export function CustomersPage() {
                 <Text c="dimmed" ta="center">
                   {hasActiveFilters
                     ? 'No encontramos clientes con los filtros actuales.'
-                    : 'Todavía no hay clientes cargados en el sistema.'}
+                    : 'Todavia no hay clientes cargados en el sistema.'}
                 </Text>
               </Stack>
               <Group justify="center">
@@ -871,130 +463,19 @@ export function CustomersPage() {
               overlayProps={{ blur: 1, radius: 'sm' }}
             />
 
-            <Box
-              mb="md"
-              style={{
-                display: 'grid',
-                gap: isCompactFilters ? 'var(--mantine-spacing-md)' : 0,
-                gridTemplateColumns: isCompactFilters
-                  ? '1fr'
-                  : 'minmax(180px, 1fr) minmax(280px, 1.6fr) minmax(200px, 1.1fr) minmax(140px, 0.8fr) minmax(120px, 0.7fr)',
-                width: '100%',
-              }}
-            >
-              <Box pr={isCompactFilters ? 0 : 'md'}>
-                <TextInput
-                  ref={companyNameInputRef}
-                  label="Buscar empresa"
-                  value={companyName}
-                  onChange={(event) =>
-                    handleCompanyNameChange(event.currentTarget.value)
-                  }
-                  rightSection={
-                    companyName ? (
-                      <CloseButton
-                        aria-label="Borrar busqueda"
-                        onClick={handleClearCompanyName}
-                        onMouseDown={(event) => event.preventDefault()}
-                        size="sm"
-                      />
-                    ) : null
-                  }
-                />
-              </Box>
-
-              <Box
-                px={isCompactFilters ? 0 : 'md'}
-                pt={isCompactFilters ? 'md' : 0}
-                style={filterSeparatorStyle}
-              >
-                <Radio.Group
-                  label="Ordenar por"
-                  value={sortBy}
-                  onChange={handleSortChange}
-                >
-                  <Group mt={8} wrap="nowrap">
-                    <Radio value="amount" label="Monto vencido" />
-                    <Radio value="months" label="Meses vencidos" />
-                  </Group>
-                </Radio.Group>
-              </Box>
-
-              <Box
-                px={isCompactFilters ? 0 : 'md'}
-                pt={isCompactFilters ? 'md' : 0}
-                style={filterSeparatorStyle}
-              >
-                <Select
-                  label="Tipo de empresa"
-                  value={companyType}
-                  onChange={handleCompanyTypeChange}
-                  data={[
-                    { value: ALL_COMPANY_TYPES, label: 'Todos' },
-                    { value: 'enterprise', label: companyTypeLabels.enterprise },
-                    { value: 'pyme', label: companyTypeLabels.pyme },
-                    { value: 'startup', label: companyTypeLabels.startup },
-                  ]}
-                  allowDeselect={false}
-                />
-              </Box>
-
-              <Box
-                pl={isCompactFilters ? 0 : 'md'}
-                pt={isCompactFilters ? 'md' : 0}
-                style={{
-                  alignItems: 'flex-start',
-                  ...filterSeparatorStyle,
-                  display: 'flex',
-                  flexDirection: 'column',
-                  minHeight: 60,
-                }}
-              >
-                <Text
-                  component="label"
-                  fw={500}
-                  mb={12}
-                  size="sm"
-                >
-                  Revisados
-                </Text>
-                <Switch
-                  label="Mostrar"
-                  checked={includeReviewed}
-                  onChange={(event) =>
-                    handleIncludeReviewedChange(event.currentTarget.checked)
-                  }
-                />
-              </Box>
-
-              <Box
-                px={isCompactFilters ? 0 : 'md'}
-                pt={isCompactFilters ? 'md' : 0}
-                style={{
-                  alignItems: 'center',
-                  ...filterSeparatorStyle,
-                  display: 'flex',
-                  justifyContent: 'center',
-                  minHeight: 60,
-                }}
-              >
-                <Button
-                  c="dimmed"
-                  fullWidth
-                  style={{
-                    height: 'auto',
-                    lineHeight: 1.2,
-                    minHeight: 44,
-                    textAlign: 'center',
-                    whiteSpace: 'normal',
-                  }}
-                  variant="default"
-                  onClick={handleResetFilters}
-                >
-                  Limpiar<br />filtros
-                </Button>
-              </Box>
-            </Box>
+            <CustomerFilters
+              companyName={companyName}
+              companyNameInputRef={companyNameInputRef}
+              companyType={companyType}
+              includeReviewed={includeReviewed}
+              onClearCompanyName={handleClearCompanyName}
+              onCompanyNameChange={handleCompanyNameChange}
+              onCompanyTypeChange={handleCompanyTypeChange}
+              onIncludeReviewedChange={handleIncludeReviewedChange}
+              onResetFilters={handleResetFilters}
+              onSortChange={handleSortChange}
+              sortBy={sortBy}
+            />
 
             <CustomersTable
               customers={customers}
