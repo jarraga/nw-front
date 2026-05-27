@@ -1030,7 +1030,7 @@ export function CustomerDetailPage() {
 
   async function handleReviewSaved() {
     await refreshCustomerDetail()
-    navigate(routePaths.customers)
+    navigate(customersPath)
   }
 
   useEffect(() => {
