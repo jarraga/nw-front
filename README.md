@@ -1,73 +1,65 @@
-# React + TypeScript + Vite
+# NW Front
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+## Requisitos
 
-Currently, two official plugins are available:
+- Node.js 22
+- npm
+- Docker, solo para levantar la version productiva en contenedor
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## Variables de entorno
 
-## React Compiler
+Revisar el archivo `.env.development` existente para desarrollo local:
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```env
+VITE_API_URL=http://localhost:8080
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+En Vite, las variables `VITE_*` se leen al momento de build.
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+## Instalar dependencias
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm install
+```
+
+## Levantar en desarrollo
+
+```bash
+npm run dev
+```
+
+La app queda disponible en la URL que informe Vite en la terminal.
+
+## Generar build local
+
+```bash
+npm run build
+```
+
+El build se genera en la carpeta `dist`.
+
+## Levantar build productivo con Docker
+
+Construir la imagen:
+
+```bash
+npm run docker:build
+```
+
+Levantar el contenedor:
+
+```bash
+npm run docker:run
+```
+
+La app queda disponible en:
+
+```text
+http://localhost:3000
+```
+
+Para cambiar la URL del backend en el build Docker:
+
+```bash
+docker build --build-arg VITE_API_URL=http://localhost:8080 -t nw-front .
 ```
